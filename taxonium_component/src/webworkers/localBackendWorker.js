@@ -99,58 +99,28 @@ const createMetadataDensityIndex = (nodes) => {
   return {
     tipNodes,
     tipYPositions: tipNodes.map((node) => node.y),
-    fieldPyramids: {},
+    fieldPrefixTrueCounts: {},
   };
 };
 
-const buildFieldDensityPyramid = (tipNodes, field) => {
-  const levels = [];
-  const levelZero = new Uint8Array(tipNodes.length);
-
+const buildFieldTruePrefixCounts = (tipNodes, field) => {
+  const prefixCounts = new Uint32Array(tipNodes.length + 1);
   for (let index = 0; index < tipNodes.length; index++) {
-    levelZero[index] = isTruthyMetadataValue(tipNodes[index][field]) ? 255 : 0;
+    prefixCounts[index + 1] =
+      prefixCounts[index] +
+      (isTruthyMetadataValue(tipNodes[index][field]) ? 1 : 0);
   }
-
-  levels.push(levelZero);
-
-  let currentLevel = levelZero;
-  while (currentLevel.length > 1) {
-    const nextLevel = new Uint8Array(Math.ceil(currentLevel.length / 2));
-    for (let index = 0; index < nextLevel.length; index++) {
-      const firstValue = currentLevel[index * 2];
-      const secondIndex = index * 2 + 1;
-      const secondValue =
-        secondIndex < currentLevel.length ? currentLevel[secondIndex] : 0;
-      const divisor = secondIndex < currentLevel.length ? 2 : 1;
-      nextLevel[index] = Math.round((firstValue + secondValue) / divisor);
-    }
-    levels.push(nextLevel);
-    currentLevel = nextLevel;
-  }
-
-  return { levels };
+  return prefixCounts;
 };
 
-const ensureFieldDensityPyramid = (metadataDensityIndex, field) => {
-  if (!metadataDensityIndex.fieldPyramids[field]) {
-    metadataDensityIndex.fieldPyramids[field] = buildFieldDensityPyramid(
+const ensureFieldTruePrefixCounts = (metadataDensityIndex, field) => {
+  if (!metadataDensityIndex.fieldPrefixTrueCounts[field]) {
+    metadataDensityIndex.fieldPrefixTrueCounts[field] = buildFieldTruePrefixCounts(
       metadataDensityIndex.tipNodes,
       field
     );
   }
-  return metadataDensityIndex.fieldPyramids[field];
-};
-
-const chooseDensityLevel = (levels, visibleTipCount, targetHeight) => {
-  const maxBins = Math.max(1, targetHeight * 2);
-  let level = 0;
-  while (
-    level + 1 < levels.length &&
-    Math.ceil(visibleTipCount / 2 ** (level + 1)) > maxBins
-  ) {
-    level += 1;
-  }
-  return level;
+  return metadataDensityIndex.fieldPrefixTrueCounts[field];
 };
 
 export const queryNodes = async (boundsForQueries) => {
@@ -308,48 +278,69 @@ const getMetadataDensity = async ({ minY, maxY, height, fields }) => {
   }
 
   fields.forEach((field) => {
-    const startTipIndex = Math.max(
-      0,
-      Math.min(tipYPositions.length - 1, findFirstIndexAtOrAbove(tipYPositions, minY))
+    const prefixTrueCounts = ensureFieldTruePrefixCounts(
+      metadataDensityIndex,
+      field
     );
-    const endTipExclusive = Math.max(
-      startTipIndex + 1,
-      Math.min(
-        tipYPositions.length,
-        findFirstIndexAtOrAbove(tipYPositions, maxY + Number.EPSILON)
-      )
-    );
-    const visibleTipCount = endTipExclusive - startTipIndex;
-    const fieldPyramid = ensureFieldDensityPyramid(metadataDensityIndex, field);
-    const chosenLevel = chooseDensityLevel(
-      fieldPyramid.levels,
-      visibleTipCount,
-      height
-    );
-    const levelData = fieldPyramid.levels[chosenLevel];
-    const binSize = 2 ** chosenLevel;
-    const startBin = Math.max(
-      0,
-      Math.min(levelData.length - 1, Math.floor(startTipIndex / binSize))
-    );
-    const endBinExclusive = Math.max(
-      startBin + 1,
-      Math.min(levelData.length, Math.ceil(endTipExclusive / binSize))
-    );
-    const slicedLevel = levelData.subarray(startBin, endBinExclusive);
+    const trueCounts = new Array(height).fill(0);
+    const totalCounts = new Array(height).fill(0);
+
+    for (let rowIndex = 0; rowIndex < height; rowIndex++) {
+      const rowUpperY = maxY - (rowIndex * (maxY - minY)) / height;
+      const rowLowerY = maxY - ((rowIndex + 1) * (maxY - minY)) / height;
+      const startTipIndex = Math.max(
+        0,
+        Math.min(
+          tipYPositions.length,
+          findFirstIndexAtOrAbove(tipYPositions, rowLowerY)
+        )
+      );
+      const endTipExclusive = Math.max(
+        startTipIndex,
+        Math.min(
+          tipYPositions.length,
+          findFirstIndexAtOrAbove(tipYPositions, rowUpperY)
+        )
+      );
+      totalCounts[rowIndex] = endTipExclusive - startTipIndex;
+      trueCounts[rowIndex] =
+        prefixTrueCounts[endTipExclusive] - prefixTrueCounts[startTipIndex];
+    }
 
     result.fields[field] = {
-      trueCounts: Array.from(slicedLevel),
-      totalCounts: new Array(slicedLevel.length).fill(255),
+      trueCounts,
+      totalCounts,
     };
   });
 
-  result.height = Math.max(
-    1,
-    ...Object.values(result.fields).map((fieldResult) => fieldResult.trueCounts.length)
+  return result;
+};
+
+const getVisibleTipCount = async ({ minY, maxY }) => {
+  await waitForProcessedData();
+  if (!processedUploadedData.metadataDensityIndex) {
+    processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
+      processedUploadedData.nodes
+    );
+  }
+  const { tipYPositions } = processedUploadedData.metadataDensityIndex;
+  const startTipIndex = Math.max(
+    0,
+    Math.min(tipYPositions.length, findFirstIndexAtOrAbove(tipYPositions, minY))
+  );
+  const endTipExclusive = Math.max(
+    startTipIndex,
+    Math.min(
+      tipYPositions.length,
+      findFirstIndexAtOrAbove(tipYPositions, maxY + Number.EPSILON)
+    )
   );
 
-  return result;
+  return {
+    minY,
+    maxY,
+    visibleTipCount: endTipExclusive - startTipIndex,
+  };
 };
 
 onmessage = async (event) => {
@@ -439,6 +430,13 @@ onmessage = async (event) => {
       const result = await getMetadataDensity(data);
       postMessage({
         type: "metadata_density",
+        data: { key: data.key, result },
+      });
+    }
+    if (data.type === "visible_tip_count") {
+      const result = await getVisibleTipCount(data);
+      postMessage({
+        type: "visible_tip_count",
         data: { key: data.key, result },
       });
     }

@@ -7,6 +7,7 @@ import type {
   QueryBounds,
   LocalBackend,
   MetadataDensityResponse,
+  VisibleTipCountResponse,
 } from "../types/backend";
 import type {
   StatusData,
@@ -17,6 +18,7 @@ import type {
   ListData,
   NextStrainData,
   MetadataDensityData,
+  VisibleTipCountData,
   LocalBackendMessage,
 } from "../types/localBackendWorker";
 import type { Node, Mutation } from "../types/node";
@@ -62,6 +64,10 @@ let metadataDensitySetters: Record<
   string,
   (data: MetadataDensityResponse) => void
 > = {};
+let visibleTipCountSetters: Record<
+  string,
+  (data: VisibleTipCountResponse) => void
+> = {};
 
 worker.onmessage = (event: MessageEvent<LocalBackendMessage>) => {
   const data = event.data;
@@ -91,6 +97,9 @@ worker.onmessage = (event: MessageEvent<LocalBackendMessage>) => {
       break;
     case "metadata_density":
       metadataDensitySetters[data.data.key]?.(data.data.result);
+      break;
+    case "visible_tip_count":
+      visibleTipCountSetters[data.data.key]?.(data.data.result);
       break;
     default:
       break;
@@ -257,6 +266,29 @@ function useLocalBackend(
     []
   );
 
+  const queryVisibleTipCount = useCallback(
+    (
+      args: {
+        minY: number;
+        maxY: number;
+      },
+      callback: (res: VisibleTipCountResponse) => void
+    ) => {
+      const key = JSON.stringify(args);
+      worker.postMessage({
+        type: "visible_tip_count",
+        key,
+        ...args,
+      });
+
+      visibleTipCountSetters[key] = (receivedData) => {
+        callback(receivedData);
+        delete visibleTipCountSetters[key];
+      };
+    },
+    []
+  );
+
   return useMemo(() => {
     return {
       queryNodes,
@@ -267,6 +299,7 @@ function useLocalBackend(
       setStatusMessage,
       getTipAtts,
       queryMetadataDensity,
+      queryVisibleTipCount,
       getNextstrainJson,
       type: "local",
     };
@@ -279,6 +312,7 @@ function useLocalBackend(
     setStatusMessage,
     getTipAtts,
     queryMetadataDensity,
+    queryVisibleTipCount,
     getNextstrainJson,
   ]);
 }

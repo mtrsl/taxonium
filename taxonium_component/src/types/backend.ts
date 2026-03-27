@@ -112,6 +112,12 @@ export interface MetadataDensityResponse {
   height: number;
 }
 
+export interface VisibleTipCountResponse {
+  minY: number;
+  maxY: number;
+  visibleTipCount: number;
+}
+
 export interface StatusMessage {
   percentage?: number;
   message?: string | null;
@@ -149,6 +155,13 @@ export interface BaseBackend {
       fields: string[];
     },
     callback: (res: MetadataDensityResponse) => void
+  ): void;
+  queryVisibleTipCount?(
+    args: {
+      minY: number;
+      maxY: number;
+    },
+    callback: (res: VisibleTipCountResponse) => void
   ): void;
   getNextstrainJson(nodeId: string | number, config: Config): void;
   type: "local" | "server";

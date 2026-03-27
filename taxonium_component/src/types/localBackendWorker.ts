@@ -45,6 +45,14 @@ export interface MetadataDensityData {
   };
 }
 
+export interface VisibleTipCountData {
+  type: "visible_tip_count";
+  data: {
+    key: string;
+    result: import("./backend").VisibleTipCountResponse;
+  };
+}
+
 export type LocalBackendMessage =
   | StatusData
   | QueryData
@@ -53,4 +61,5 @@ export type LocalBackendMessage =
   | DetailsData
   | ListData
   | NextStrainData
-  | MetadataDensityData;
+  | MetadataDensityData
+  | VisibleTipCountData;
