@@ -38,6 +38,7 @@ const cache_helper = {
 let processedUploadedData;
 
 const TRUE_VALUES = new Set(["true", "1", "yes", "y", "t"]);
+const METADATA_BACKGROUND_RGBA = [244, 244, 244, 235];
 
 const sendStatusMessage = (status_obj) => {
   postMessage({
@@ -93,6 +94,19 @@ const normalizeMetadataValue = (value) => {
 
 const isTruthyMetadataValue = (value) =>
   TRUE_VALUES.has(normalizeMetadataValue(value));
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+const blendWithBackground = (color, fraction, background) => {
+  const clampedFraction = Math.max(0, Math.min(1, fraction));
+  const mix = 1 - clampedFraction;
+  return [
+    Math.round(color[0] * clampedFraction + background[0] * mix),
+    Math.round(color[1] * clampedFraction + background[1] * mix),
+    Math.round(color[2] * clampedFraction + background[2] * mix),
+    Math.round(background[3] + clampedFraction * (255 - background[3])),
+  ];
+};
 
 const createMetadataDensityIndex = (nodes) => {
   const tipNodes = nodes.filter((node) => node.num_tips === 1 || node.is_tip);
@@ -248,7 +262,15 @@ const getList = async (node_id, att) => {
   return atts;
 };
 
-const getMetadataDensity = async ({ minY, maxY, height, fields }) => {
+const getMetadataDensity = async ({
+  minY,
+  maxY,
+  height,
+  width,
+  outputHeight,
+  columnWidth,
+  fields,
+}) => {
   await waitForProcessedData();
   if (!processedUploadedData.metadataDensityIndex) {
     processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
@@ -259,21 +281,19 @@ const getMetadataDensity = async ({ minY, maxY, height, fields }) => {
   const { tipYPositions } = metadataDensityIndex;
 
   const result = {
-    fields: Object.fromEntries(
-      fields.map((field) => [
-        field,
-        {
-          trueCounts: new Uint32Array(height),
-          totalCounts: new Uint32Array(height),
-        },
-      ])
-    ),
+    fields: {},
     minY,
     maxY,
     height,
   };
 
-  if (tipYPositions.length === 0 || maxY <= minY || height <= 0) {
+  if (
+    tipYPositions.length === 0 ||
+    maxY <= minY ||
+    height <= 0 ||
+    width <= 0 ||
+    outputHeight <= 0
+  ) {
     return result;
   }
 
@@ -300,7 +320,8 @@ const getMetadataDensity = async ({ minY, maxY, height, fields }) => {
     rowUpperBounds[rowIndex] = endTipExclusive;
   }
 
-  fields.forEach((field) => {
+  const fieldResults = {};
+  fields.forEach(({ field }) => {
     const prefixTrueCounts = ensureFieldTruePrefixCounts(
       metadataDensityIndex,
       field
@@ -316,11 +337,62 @@ const getMetadataDensity = async ({ minY, maxY, height, fields }) => {
         prefixTrueCounts[endTipExclusive] - prefixTrueCounts[startTipIndex];
     }
 
-    result.fields[field] = {
+    fieldResults[field] = {
       trueCounts,
       totalCounts,
     };
   });
+
+  const rgba = new Uint8ClampedArray(width * outputHeight * 4);
+  const fieldPixelSpans = fields.map((fieldConfig, fieldIndex) => ({
+    field: fieldConfig.field,
+    color: fieldConfig.color,
+    xStart: Math.max(0, Math.floor(12 + fieldIndex * columnWidth + 1)),
+    xEnd: Math.min(width, Math.ceil(12 + (fieldIndex + 1) * columnWidth - 1)),
+  }));
+
+  fieldPixelSpans.forEach(({ field, color, xStart, xEnd }) => {
+    if (xEnd <= xStart) {
+      return;
+    }
+    const fieldResult = fieldResults[field];
+    const { trueCounts, totalCounts } = fieldResult;
+    const sourceHeight = Math.min(trueCounts.length, totalCounts.length);
+
+    for (let rowIndex = 0; rowIndex < outputHeight; rowIndex++) {
+      const sourceRow =
+        sourceHeight > 0
+          ? clamp(
+              Math.floor((rowIndex * sourceHeight) / Math.max(1, outputHeight)),
+              0,
+              sourceHeight - 1
+            )
+          : 0;
+      const totalCount = sourceHeight > 0 ? totalCounts[sourceRow] : 0;
+      const fillColor =
+        totalCount === 0
+          ? METADATA_BACKGROUND_RGBA
+          : blendWithBackground(
+              color,
+              trueCounts[sourceRow] / totalCount,
+              METADATA_BACKGROUND_RGBA
+            );
+
+      for (let x = xStart; x < xEnd; x++) {
+        const pixelOffset = (rowIndex * width + x) * 4;
+        rgba[pixelOffset] = fillColor[0];
+        rgba[pixelOffset + 1] = fillColor[1];
+        rgba[pixelOffset + 2] = fillColor[2];
+        rgba[pixelOffset + 3] = fillColor[3];
+      }
+    }
+  });
+
+  result.bitmap = {
+    rgba,
+    width,
+    height: outputHeight,
+  };
 
   return result;
 };
@@ -437,10 +509,7 @@ onmessage = async (event) => {
     }
     if (data.type === "metadata_density") {
       const result = await getMetadataDensity(data);
-      const transfer = Object.values(result.fields).flatMap((field) => [
-        field.trueCounts.buffer,
-        field.totalCounts.buffer,
-      ]);
+      const transfer = result.bitmap ? [result.bitmap.rgba.buffer] : [];
       postMessage({
         type: "metadata_density",
         data: { key: data.key, result },

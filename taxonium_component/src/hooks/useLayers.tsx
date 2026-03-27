@@ -128,6 +128,65 @@ type DensityCanvasCache = {
   imageData: ImageData;
 };
 
+const createDensityPresentationCanvas = (
+  sourceCanvas: HTMLCanvasElement,
+  width: number,
+  height: number
+) => {
+  const presentationCanvas = document.createElement("canvas");
+  presentationCanvas.width = width;
+  presentationCanvas.height = height;
+  const presentationContext = presentationCanvas.getContext("2d");
+  if (!presentationContext) {
+    return sourceCanvas;
+  }
+  presentationContext.drawImage(sourceCanvas, 0, 0);
+  return presentationCanvas;
+};
+
+const createMetadataDensityBitmapCanvas = ({
+  cacheRef,
+  bitmap,
+}: {
+  cacheRef: { current: DensityCanvasCache | null };
+  bitmap: NonNullable<MetadataDensityResponse["bitmap"]>;
+}): HTMLCanvasElement | null => {
+  if (typeof document === "undefined" || bitmap.width <= 0 || bitmap.height <= 0) {
+    return null;
+  }
+
+  let nextCache = cacheRef.current;
+  if (!nextCache) {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return null;
+    }
+    nextCache = {
+      canvas,
+      context,
+      imageData: context.createImageData(bitmap.width, bitmap.height),
+    };
+  }
+
+  if (
+    nextCache.canvas.width !== bitmap.width ||
+    nextCache.canvas.height !== bitmap.height
+  ) {
+    nextCache.canvas.width = bitmap.width;
+    nextCache.canvas.height = bitmap.height;
+    nextCache.imageData = nextCache.context.createImageData(
+      bitmap.width,
+      bitmap.height
+    );
+  }
+
+  nextCache.imageData.data.set(bitmap.rgba);
+  nextCache.context.putImageData(nextCache.imageData, 0, 0);
+  cacheRef.current = nextCache;
+  return createDensityPresentationCanvas(nextCache.canvas, bitmap.width, bitmap.height);
+};
+
 const createMetadataDensityCanvas = ({
   cacheRef,
   width,
@@ -287,15 +346,7 @@ const createMetadataDensityCanvas = ({
 
   context.putImageData(imageData, 0, 0);
   cacheRef.current = nextCache;
-  const presentationCanvas = document.createElement("canvas");
-  presentationCanvas.width = width;
-  presentationCanvas.height = height;
-  const presentationContext = presentationCanvas.getContext("2d");
-  if (!presentationContext) {
-    return canvas;
-  }
-  presentationContext.drawImage(canvas, 0, 0);
-  return presentationCanvas;
+  return createDensityPresentationCanvas(canvas, width, height);
 };
 
 const getKeyStuff = (
@@ -866,7 +917,13 @@ const useLayers = ({
         1,
         Math.ceil(Math.max(1, Math.round(deckSize?.height ?? 1)) / 2)
       ),
-      fields: metadataMatrix.matrixFields.map((field) => field.field),
+      width: Math.max(1, Math.round(metadataMatrix.panelWidth)),
+      outputHeight: Math.max(1, Math.round(deckSize?.height ?? 1)),
+      columnWidth: metadataMatrix.columnWidth,
+      fields: metadataMatrix.matrixFields.map((field) => ({
+        field: field.field,
+        color: field.color,
+      })),
     };
   }, [
     backend,
@@ -972,22 +1029,27 @@ const useLayers = ({
       metadataMatrix.isEnabled &&
       visibleTipNodesForMatrix.length > 0 &&
       metadataRenderMode === "density"
-        ? createMetadataDensityCanvas({
-            cacheRef: densityCanvasCacheRef,
-            width: Math.max(1, Math.round(metadataMatrix.panelWidth)),
-            height: Math.max(1, Math.round(deckSize?.height ?? 1)),
-            columnWidth: metadataMatrix.columnWidth,
-            matrixFields: metadataMatrix.matrixFields,
-            tipNodes:
-              backend.type === "server"
-                ? sortedVisibleTipNodesForMatrix
-                : undefined,
-            densityData: densityPayload,
-            allowTipNodeFallback: backend.type === "server",
-            minY: densityMinY,
-            maxY: densityMaxY,
-            isTruthyValue: metadataMatrix.isTruthyValue,
-          })
+        ? backend.type === "local" && densityPayload?.bitmap
+          ? createMetadataDensityBitmapCanvas({
+              cacheRef: densityCanvasCacheRef,
+              bitmap: densityPayload.bitmap,
+            })
+          : createMetadataDensityCanvas({
+              cacheRef: densityCanvasCacheRef,
+              width: Math.max(1, Math.round(metadataMatrix.panelWidth)),
+              height: Math.max(1, Math.round(deckSize?.height ?? 1)),
+              columnWidth: metadataMatrix.columnWidth,
+              matrixFields: metadataMatrix.matrixFields,
+              tipNodes:
+                backend.type === "server"
+                  ? sortedVisibleTipNodesForMatrix
+                  : undefined,
+              densityData: densityPayload,
+              allowTipNodeFallback: backend.type === "server",
+              minY: densityMinY,
+              maxY: densityMaxY,
+              isTruthyValue: metadataMatrix.isTruthyValue,
+            })
         : null,
     [
       backend.type,

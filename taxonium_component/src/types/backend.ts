@@ -105,11 +105,18 @@ export interface MetadataDensityField {
   totalCounts: Uint32Array | number[];
 }
 
+export interface MetadataDensityBitmap {
+  rgba: Uint8ClampedArray;
+  width: number;
+  height: number;
+}
+
 export interface MetadataDensityResponse {
   fields: Record<string, MetadataDensityField>;
   minY: number;
   maxY: number;
   height: number;
+  bitmap?: MetadataDensityBitmap;
 }
 
 export interface VisibleTipCountResponse {
@@ -152,7 +159,13 @@ export interface BaseBackend {
       minY: number;
       maxY: number;
       height: number;
-      fields: string[];
+      width: number;
+      outputHeight: number;
+      columnWidth: number;
+      fields: Array<{
+        field: string;
+        color: [number, number, number];
+      }>;
     },
     callback: (res: MetadataDensityResponse) => void
   ): void;

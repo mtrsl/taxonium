@@ -247,7 +247,13 @@ function useLocalBackend(
         minY: number;
         maxY: number;
         height: number;
-        fields: string[];
+        width: number;
+        outputHeight: number;
+        columnWidth: number;
+        fields: Array<{
+          field: string;
+          color: [number, number, number];
+        }>;
       },
       callback: (res: MetadataDensityResponse) => void
     ) => {
