@@ -96,11 +96,11 @@ export const ConfigTree = {
 };
 
 const nwk = `((A:0.1,B:0.2):0.3,(C:0.4,D:0.5):0.6);`;
-const metadata_text = `Node,Name,Species
-A,Bob,Cow
-B,Jim,Cow
-C,Joe,Fish
-D,John,Fish`;
+const metadata_text = `Node,Name,Species,Vaccinated,HostJump,Sampled
+A,Bob,Cow,true,false,yes
+B,Jim,Cow,false,false,no
+C,Joe,Fish,true,true,yes
+D,John,Fish,false,true,no`;
 
 const metadata = {
   filename: "test.csv",
@@ -118,6 +118,27 @@ export const LocalDataWithMetadataNew = {
       filetype: "nwk",
       metadata: metadata,
     },
+  },
+  parameters: {
+    layout: "padded",
+  },
+};
+
+export const LocalDataWithMetadataMatrix = {
+  args: {
+    sourceData: {
+      status: "loaded",
+      filename: "test.nwk",
+      data: nwk,
+      filetype: "nwk",
+      metadata: metadata,
+    },
+    query: {
+      metadataMatrix: JSON.stringify({
+        fields: ["meta_Vaccinated", "meta_HostJump", "meta_Sampled"],
+      }),
+    },
+    updateQuery: () => {},
   },
   parameters: {
     layout: "padded",

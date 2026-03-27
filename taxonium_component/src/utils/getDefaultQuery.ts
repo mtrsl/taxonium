@@ -12,6 +12,7 @@ const default_query: Query = {
   xType: "x_dist",
   mutationTypesEnabled: JSON.stringify({ aa: true, nt: false }),
   treenomeEnabled: false,
+  metadataMatrix: JSON.stringify({ fields: [] }),
 };
 
 // first_search is currently unused, but remains for backwards compatibility

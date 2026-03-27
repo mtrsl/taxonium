@@ -34,6 +34,7 @@ import type { StatusMessage, DynamicData, Config } from "./types/backend";
 import type { DeckSize, HoverInfo } from "./types/common";
 import type { Node, Mutation } from "./types/node";
 import type { ColorHook, ColorBy } from "./types/color";
+import type { MetadataMatrix } from "./types/metadataMatrix";
 
 const MemoizedKey = React.memo(Key);
 
@@ -45,6 +46,7 @@ export interface DeckProps {
   view: ViewType;
   colorHook: ColorHook;
   colorBy: ColorBy;
+  metadataMatrix: MetadataMatrix;
   hoverDetails: HoverDetailsState;
   config: Config;
   statusMessage: StatusMessage | null;
@@ -53,6 +55,7 @@ export interface DeckProps {
   selectedDetails: SelectedDetails;
   setDeckSize: (size: DeckSize) => void;
   deckSize: DeckSize;
+  mainDeckSize: DeckSize;
   isCurrentlyOutsideBounds: boolean;
   deckRef: React.MutableRefObject<DeckGLRef | null>;
   jbrowseRef: React.RefObject<HTMLSpanElement | null>;
@@ -72,6 +75,7 @@ function Deck({
   view,
   colorHook,
   colorBy,
+  metadataMatrix,
   hoverDetails,
   config,
   statusMessage,
@@ -80,6 +84,7 @@ function Deck({
   selectedDetails,
   setDeckSize,
   deckSize,
+  mainDeckSize,
   isCurrentlyOutsideBounds,
   deckRef,
   jbrowseRef,
@@ -234,11 +239,12 @@ function Deck({
     data,
     search,
     viewState,
-    deckSize,
+    deckSize: mainDeckSize,
     colorHook,
     setHoverInfo: setHoverInfo as (info: HoverInfo<Node> | null) => void,
     hoverInfo: hoverInfo as HoverInfo<Node> | null,
     colorBy,
+    metadataMatrix,
     xType,
     modelMatrix: view.modelMatrix,
     selectedDetails,
@@ -400,6 +406,52 @@ function Deck({
           }
         }}
       >
+        {metadataMatrix.isEnabled && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: `${view.layout.metadataViewX}px`,
+              width: `${view.layout.metadataMatrixWidth}px`,
+              height: `${metadataMatrix.headerHeight}px`,
+              pointerEvents: "none",
+              zIndex: 2,
+              background:
+                "linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(255,255,255,0.75), rgba(255,255,255,0))",
+              borderLeft: "1px solid rgba(209, 213, 219, 0.95)",
+            }}
+          >
+            <div className="relative w-full h-full">
+              {metadataMatrix.matrixFields.map((field, index) => (
+                <div
+                  key={field.field}
+                  style={{
+                    position: "absolute",
+                    top: "10px",
+                    left: `${12 + index * metadataMatrix.columnWidth}px`,
+                    width: `${metadataMatrix.columnWidth}px`,
+                    display: "flex",
+                    justifyContent: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      writingMode: "vertical-rl",
+                      transform: "rotate(180deg)",
+                      color: `rgb(${field.color[0]}, ${field.color[1]}, ${field.color[2]})`,
+                      fontSize: "11px",
+                      lineHeight: 1,
+                      fontWeight: 600,
+                      textAlign: "left",
+                    }}
+                  >
+                    {field.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <DeckView id="browser-axis">
           <div
             style={{

@@ -8,6 +8,7 @@ import useGetDynamicData from "./hooks/useGetDynamicData";
 import useColor from "./hooks/useColor";
 import useSearch from "./hooks/useSearch";
 import useColorBy from "./hooks/useColorBy";
+import useMetadataMatrix from "./hooks/useMetadataMatrix";
 import useNodeDetails from "./hooks/useNodeDetails";
 import useHoverDetails from "./hooks/useHoverDetails";
 import type { DeckGLRef } from "@deck.gl/react";
@@ -28,6 +29,7 @@ const ReactTooltipAny: any = ReactTooltip;
 import { Toaster } from "react-hot-toast";
 import type { DeckSize } from "./types/common";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
+import type { MetadataMatrixConfig } from "./types/metadataMatrix";
 
 interface SourceData {
   status: string;
@@ -95,6 +97,20 @@ function Taxonium({
     updateQuery = backupUpdateQuery;
   }
 
+  const parsedMetadataMatrix = useMemo(() => {
+    try {
+      return JSON.parse(
+        (query.metadataMatrix as string | undefined) ?? '{"fields":[]}'
+      ) as Partial<MetadataMatrixConfig>;
+    } catch {
+      return { fields: [] };
+    }
+  }, [query.metadataMatrix]);
+
+  const selectedMetadataFieldCount = Array.isArray(parsedMetadataMatrix.fields)
+    ? parsedMetadataMatrix.fields.length
+    : 0;
+
   // if no onSetTitle, set it to a noop
   if (!onSetTitle) {
     onSetTitle = () => {};
@@ -122,7 +138,17 @@ function Taxonium({
     settings,
     deckSize,
     mouseDownIsMinimap,
+    metadataMatrixWidth: selectedMetadataFieldCount
+      ? Math.max(120, selectedMetadataFieldCount * 24 + 24)
+      : 0,
   });
+  const mainDeckSize = useMemo(
+    () => ({
+      width: view.layout.mainViewWidth,
+      height: deckSize.height,
+    }),
+    [deckSize.height, view.layout.mainViewWidth]
+  );
 
   const backend = useBackend(
     backendUrl ? backendUrl : query.backend,
@@ -181,8 +207,16 @@ function Taxonium({
       view.viewState,
       config,
       xType,
-      deckSize
+      deckSize,
+      mainDeckSize
     );
+
+  const metadataMatrix = useMetadataMatrix({
+    query,
+    updateQuery,
+    config,
+    data,
+  });
 
   const perNodeFunctions = usePerNodeFunctions(
     data as unknown as DynamicDataWithLookup,
@@ -282,6 +316,7 @@ function Taxonium({
               view={view}
               colorHook={colorHook}
               colorBy={colorBy}
+              metadataMatrix={metadataMatrix}
               config={config}
               hoverDetails={hoverDetails}
               selectedDetails={selectedDetails}
@@ -289,6 +324,7 @@ function Taxonium({
               settings={settings}
               setDeckSize={setDeckSize}
               deckSize={deckSize}
+              mainDeckSize={mainDeckSize}
               isCurrentlyOutsideBounds={isCurrentlyOutsideBounds}
               treenomeState={treenomeState as unknown as TreenomeState}
               deckRef={deckRef}
@@ -326,6 +362,7 @@ function Taxonium({
                 backend={backend}
                 search={search}
                 colorBy={colorBy}
+                metadataMatrix={metadataMatrix}
                 colorHook={colorHook}
                 config={config}
                 selectedDetails={selectedDetails}

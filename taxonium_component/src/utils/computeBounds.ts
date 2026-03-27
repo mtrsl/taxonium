@@ -1,4 +1,7 @@
-export default function computeBounds(vs: any, deckSize: {width:number; height:number} | null) {
+export default function computeBounds(
+  vs: any,
+  deckSize: { width: number; height: number } | null
+) {
   if (!deckSize) return vs;
   const zoom = Array.isArray(vs.zoom) ? vs.zoom : [vs.zoom, vs.zoom];
   const real_width = deckSize.width / 2 ** zoom[0];

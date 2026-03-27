@@ -19,6 +19,29 @@ import type { SearchState } from "../types/search";
 import type { TreenomeState } from "../types/treenome";
 import type { HoverDetailsState, SelectedDetails } from "../types/ui";
 import type { ViewState } from "../types/view";
+import type {
+  MetadataMatrix,
+  MetadataMatrixCell,
+  MetadataMatrixDensityBin,
+  MetadataMatrixRenderMode,
+} from "../types/metadataMatrix";
+
+const blendWithWhite = (
+  color: [number, number, number],
+  fraction: number
+): [number, number, number, number] => {
+  const clampedFraction = Math.max(0, Math.min(1, fraction));
+  const mix = 1 - clampedFraction;
+  return [
+    Math.round(color[0] * clampedFraction + 255 * mix),
+    Math.round(color[1] * clampedFraction + 255 * mix),
+    Math.round(color[2] * clampedFraction + 255 * mix),
+    Math.round(90 + clampedFraction * 165),
+  ];
+};
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
 
 const getKeyStuff = (
   getNodeColorField: (node: Node, data: NodeLookupData) => string | number,
@@ -57,6 +80,7 @@ interface UseLayersProps {
   setHoverInfo: (info: HoverInfo<Node> | null) => void;
   hoverInfo: HoverInfo<Node> | null;
   colorBy: ColorBy;
+  metadataMatrix: MetadataMatrix;
   xType: string;
   modelMatrix: number[];
   selectedDetails: SelectedDetails;
@@ -80,6 +104,7 @@ const useLayers = ({
   setHoverInfo,
   hoverInfo,
   colorBy,
+  metadataMatrix,
   xType,
   modelMatrix,
   selectedDetails,
@@ -191,6 +216,11 @@ const useLayers = ({
   const zoomY = Array.isArray(viewState.zoom)
     ? viewState.zoom[1]
     : (viewState.zoom as number);
+  const yPixelsPerWorldUnit = 2 ** zoomY;
+  const pixelToWorldY = useCallback(
+    (pixels: number) => pixels / yPixelsPerWorldUnit,
+    [yPixelsPerWorldUnit]
+  );
 
   const outer_bounds = [
     [-100000, -100000],
@@ -422,6 +452,208 @@ const useLayers = ({
     );
   }
 
+  const tipNodesForMatrix = useMemo(
+    () =>
+      detailed_scatter_data.filter(
+        (node: Node) =>
+          node.is_tip || (node.is_tip === undefined && node.num_tips === 1),
+      ),
+    [detailed_scatter_data]
+  );
+
+  const pixelsPerTip =
+    deckSize && deckSize.height > 0 && tipNodesForMatrix.length > 0
+      ? deckSize.height / tipNodesForMatrix.length
+      : Number.POSITIVE_INFINITY;
+
+  const metadataRenderMode: MetadataMatrixRenderMode = useMemo(() => {
+    if (pixelsPerTip >= 10) {
+      return "boxes";
+    }
+    if (pixelsPerTip >= 4) {
+      return "rectangles";
+    }
+    if (pixelsPerTip >= 0.75) {
+      return "strips";
+    }
+    return "density";
+  }, [pixelsPerTip]);
+
+  if (metadataMatrix.isEnabled && tipNodesForMatrix.length > 0) {
+    const matrixCells: MetadataMatrixCell[] = tipNodesForMatrix.flatMap(
+      (node: Node) =>
+        metadataMatrix.matrixFields.map((field, index) => ({
+          node,
+          field: field.field,
+          x:
+            12 + index * metadataMatrix.columnWidth + metadataMatrix.columnWidth / 2,
+          y: node.y,
+          isTrue: metadataMatrix.isTruthyValue(node[field.field]),
+          color: field.color,
+        }))
+    );
+
+    if (metadataRenderMode === "boxes" || metadataRenderMode === "rectangles") {
+      const heightPixels =
+        metadataRenderMode === "boxes"
+          ? Math.min(metadataMatrix.cellSize, Math.max(6, pixelsPerTip - 1))
+          : Math.min(18, Math.max(3, pixelsPerTip));
+      const halfHeight = pixelToWorldY(heightPixels) / 2;
+      const halfWidth =
+        metadataRenderMode === "boxes"
+          ? metadataMatrix.cellSize / 2
+          : Math.max(metadataMatrix.cellSize / 2, metadataMatrix.columnWidth / 2 - 3);
+      layers.push({
+        layerType: "PolygonLayer",
+        id: `metadata-matrix-${metadataRenderMode}`,
+        data: matrixCells,
+        pickable: false,
+        stroked: true,
+        filled: true,
+        lineWidthUnits: "pixels",
+        getLineWidth: 1,
+        getPolygon: (d: MetadataMatrixCell) => [
+          [d.x - halfWidth, d.y - halfHeight],
+          [d.x + halfWidth, d.y - halfHeight],
+          [d.x + halfWidth, d.y + halfHeight],
+          [d.x - halfWidth, d.y + halfHeight],
+        ],
+        getFillColor: (d: MetadataMatrixCell) =>
+          d.isTrue ? [...d.color, 255] : [255, 255, 255, 225],
+        getLineColor: (d: MetadataMatrixCell) => d.color,
+        updateTriggers: {
+          getPolygon: [
+            metadataRenderMode,
+            metadataMatrix.cellSize,
+            metadataMatrix.columnWidth,
+            heightPixels,
+            zoomY,
+          ],
+          getFillColor: [metadataMatrix.matrixFields],
+          getLineColor: [metadataMatrix.matrixFields],
+        },
+      });
+    } else if (metadataRenderMode === "strips") {
+      const stripHeightPixels = clamp(pixelsPerTip * 1.25, 1, 4);
+      const halfHeight = pixelToWorldY(stripHeightPixels) / 2;
+      const halfWidth = Math.max(
+        metadataMatrix.columnWidth / 2 - 2,
+        metadataMatrix.cellSize / 2
+      );
+      layers.push({
+        layerType: "PolygonLayer",
+        id: "metadata-matrix-strips",
+        data: matrixCells,
+        pickable: false,
+        stroked: false,
+        filled: true,
+        getPolygon: (d: MetadataMatrixCell) => [
+          [d.x - halfWidth, d.y - halfHeight],
+          [d.x + halfWidth, d.y - halfHeight],
+          [d.x + halfWidth, d.y + halfHeight],
+          [d.x - halfWidth, d.y + halfHeight],
+        ],
+        getFillColor: (d: MetadataMatrixCell) =>
+          d.isTrue ? [...d.color, 245] : [238, 238, 238, 220],
+        updateTriggers: {
+          getPolygon: [
+            metadataMatrix.columnWidth,
+            metadataMatrix.cellSize,
+            stripHeightPixels,
+            zoomY,
+          ],
+          getFillColor: [metadataMatrix.matrixFields],
+        },
+      });
+    } else {
+      const maxDensityBins = 2048;
+      const densityBinPixelHeight = Math.max(
+        1,
+        Math.ceil(
+          clamp(1 + (0.75 - pixelsPerTip) * 6, 1, 6) *
+            Math.max(1, (deckSize?.height ?? 1) / maxDensityBins)
+        )
+      );
+      const densityBinCount = Math.max(
+        1,
+        Math.min(
+          maxDensityBins,
+          Math.ceil((deckSize?.height ?? 1) / densityBinPixelHeight)
+        )
+      );
+      const binWorldHeight = Math.max(
+        pixelToWorldY(1),
+        (computedViewState.max_y - computedViewState.min_y) / densityBinCount
+      );
+      const densityBins: MetadataMatrixDensityBin[] = [];
+
+      metadataMatrix.matrixFields.forEach((field, fieldIndex) => {
+        const bins = Array.from({ length: densityBinCount }, (_, binIndex) => ({
+          field: field.field,
+          x:
+            12 +
+            fieldIndex * metadataMatrix.columnWidth +
+            metadataMatrix.columnWidth / 2,
+          y0: computedViewState.min_y + binIndex * binWorldHeight,
+          y1: computedViewState.min_y + (binIndex + 1) * binWorldHeight,
+          trueCount: 0,
+          totalCount: 0,
+          fraction: 0,
+          color: field.color,
+        }));
+
+        tipNodesForMatrix.forEach((node: Node) => {
+          const unclampedIndex = Math.floor(
+            (node.y - computedViewState.min_y) / binWorldHeight
+          );
+          const binIndex = Math.max(
+            0,
+            Math.min(densityBinCount - 1, unclampedIndex)
+          );
+          bins[binIndex].totalCount += 1;
+          if (metadataMatrix.isTruthyValue(node[field.field])) {
+            bins[binIndex].trueCount += 1;
+          }
+        });
+
+        bins.forEach((bin) => {
+          bin.fraction =
+            bin.totalCount > 0 ? bin.trueCount / bin.totalCount : 0;
+        });
+        densityBins.push(...bins);
+      });
+
+      layers.push({
+        layerType: "PolygonLayer",
+        id: "metadata-matrix-density",
+        data: densityBins,
+        pickable: false,
+        stroked: false,
+        filled: true,
+        getPolygon: (d: MetadataMatrixDensityBin) => {
+          const halfWidth = metadataMatrix.columnWidth / 2 - 3;
+          return [
+            [d.x - halfWidth, d.y0],
+            [d.x + halfWidth, d.y0],
+            [d.x + halfWidth, d.y1],
+            [d.x - halfWidth, d.y1],
+          ];
+        },
+        getFillColor: (d: MetadataMatrixDensityBin) =>
+          d.totalCount === 0 ? [248, 248, 248, 180] : blendWithWhite(d.color, d.fraction),
+        updateTriggers: {
+          getPolygon: [
+            metadataMatrix.columnWidth,
+            densityBinCount,
+            computedViewState.min_y,
+            computedViewState.max_y,
+          ],
+          getFillColor: [metadataMatrix.matrixFields],
+        },
+      });
+    }
+  }
+
   const proportionalToNodesOnScreen =
     (config as any).num_tips / 2 ** zoomY;
 
@@ -622,6 +854,7 @@ const useLayers = ({
         (layer.id.startsWith("fillin") &&
           viewport.id === "main" &&
           isCurrentlyOutsideBounds) ||
+        (layer.id.startsWith("metadata") && viewport.id === "metadata-matrix") ||
         (layer.id.startsWith("browser-loaded") &&
           viewport.id === "browser-main") ||
         (layer.id.startsWith("browser-fillin") &&

@@ -28,7 +28,8 @@ function useGetDynamicData(
   viewState: ViewState,
   config: Config,
   xType: string,
-  deckSize: DeckSize | null
+  deckSize: DeckSize | null,
+  mainDeckSize: DeckSize | null
 ): {
   data: DynamicData;
   boundsForQueries: QueryBounds | null;
@@ -45,7 +46,7 @@ function useGetDynamicData(
   let [timeoutRef, setTimeoutRef] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const vs = computeBounds({ ...viewState }, deckSize);
+    const vs = computeBounds({ ...viewState }, mainDeckSize);
     if (
       !boundsForQueries ||
       xType !== boundsForQueries.xType ||
@@ -71,10 +72,10 @@ function useGetDynamicData(
 
       setBoundsForQueries(newBoundForQuery);
     }
-  }, [viewState, boundsForQueries, triggerRefresh, xType, deckSize]);
+  }, [viewState, boundsForQueries, triggerRefresh, xType, mainDeckSize]);
 
   const isCurrentlyOutsideBounds = useMemo(() => {
-    const vs = computeBounds({ ...viewState }, deckSize);
+    const vs = computeBounds({ ...viewState }, mainDeckSize);
     return (
       vs.min_x &&
       dynamicData &&
@@ -85,7 +86,7 @@ function useGetDynamicData(
         vs.min_y < dynamicData.lastBounds.min_y! ||
         vs.max_y > dynamicData.lastBounds.max_y!)
     );
-  }, [viewState, dynamicData, deckSize]);
+  }, [viewState, dynamicData, mainDeckSize]);
 
   useEffect(() => {
       if (config.title !== "loading") {

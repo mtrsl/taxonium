@@ -10,6 +10,7 @@ import prettifyName from "../utils/prettifyName";
 import { SearchState } from "../types/search";
 import type { Config, Backend } from "../types/backend";
 import type { ColorHook, ColorBy } from "../types/color";
+import type { MetadataMatrix } from "../types/metadataMatrix";
 import type { Settings } from "../types/settings";
 import type { SelectedDetails, OverlayContent } from "../types/ui";
 import type { TreenomeState } from "../types/treenome";
@@ -50,6 +51,7 @@ const fixAuthors = (authors: string) => {
 interface SearchPanelProps {
   search: SearchState;
   colorBy: ColorBy;
+  metadataMatrix: MetadataMatrix;
   config: Config;
   selectedDetails: SelectedDetails;
   overlayContent: OverlayContent["content"];
@@ -70,6 +72,7 @@ interface SearchPanelProps {
 function SearchPanel({
   search,
   colorBy,
+  metadataMatrix,
   config,
   selectedDetails,
   overlayContent,
@@ -446,6 +449,80 @@ function SearchPanel({
             </label>
           </div>
         )}
+        <div className="space-y-2 border-t border-gray-100 pt-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-gray-700">Metadata matrix</h3>
+            {metadataMatrix.selectedFields.length > 0 && (
+              <span className="text-xs text-gray-500">
+                {metadataMatrix.selectedFields.length} columns
+              </span>
+            )}
+          </div>
+          {metadataMatrix.availableFields.length === 0 ? (
+            <p className="text-xs text-gray-500">
+              No boolean metadata columns detected.
+            </p>
+          ) : (
+            <>
+              <div className="max-h-32 overflow-y-auto space-y-1 border border-gray-200 rounded-sm p-2">
+                {metadataMatrix.availableFields.map((field) => (
+                  <label
+                    key={field}
+                    className="flex items-center justify-between gap-2 text-xs text-gray-700"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={metadataMatrix.selectedFields.includes(field)}
+                        onChange={() => metadataMatrix.toggleField(field)}
+                      />
+                      <span className="truncate">{prettifyName(field, config)}</span>
+                    </span>
+                    <span
+                      className="inline-block w-3 h-3 rounded-sm border border-gray-300 shrink-0"
+                      style={{
+                        backgroundColor: `rgb(${metadataMatrix.matrixFields.find(
+                          (item) => item.field === field
+                        )?.color.join(",") ?? "255,255,255"})`,
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+              {metadataMatrix.selectedFields.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-xs text-gray-500">
+                    Display order
+                  </div>
+                  {metadataMatrix.selectedFields.map((field, index) => (
+                    <div
+                      key={field}
+                      className="flex items-center justify-between gap-2 text-xs text-gray-700 border border-gray-200 rounded-sm px-2 py-1"
+                    >
+                      <span className="truncate">{prettifyName(field, config)}</span>
+                      <span className="flex items-center gap-1 shrink-0">
+                        <button
+                          className="border rounded px-1 disabled:opacity-40"
+                          disabled={index === 0}
+                          onClick={() => metadataMatrix.moveField(field, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          className="border rounded px-1 disabled:opacity-40"
+                          disabled={index === metadataMatrix.selectedFields.length - 1}
+                          onClick={() => metadataMatrix.moveField(field, 1)}
+                        >
+                          ↓
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
       <div className="py-3 flex flex-col md:min-h-0 border-gray-200">
         <h2 className="font-bold text-gray-700 flex justify-between items-center mb-2">

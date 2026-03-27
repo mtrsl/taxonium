@@ -15,6 +15,8 @@ export interface Query {
   treenomeEnabled?: string | boolean;
   /** JSON string describing color-by state */
   color?: string;
+  /** JSON string describing metadata matrix state */
+  metadataMatrix?: string;
   /** JSON string containing config overrides */
   config?: string;
   /** URL to fetch config from */

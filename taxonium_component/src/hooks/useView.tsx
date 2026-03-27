@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { OrthographicView, OrthographicController } from "@deck.gl/core";
 import type { OrthographicViewProps } from "@deck.gl/core";
 import type { Settings } from "../types/settings";
@@ -28,18 +28,24 @@ const defaultViewState: ViewState = {
 
 type ViewStateType = ViewState;
 
+const getZoomY = (zoom: number | [number, number]) =>
+  Array.isArray(zoom) ? zoom[1] : zoom;
+
 interface UseViewProps {
   settings: Settings;
   deckSize: DeckSize | null;
   mouseDownIsMinimap: boolean;
+  metadataMatrixWidth?: number;
 }
 
-const useView = ({ settings, deckSize, mouseDownIsMinimap }: UseViewProps) => {
-  const [viewState, setViewState] = useState<ViewStateType>(defaultViewState);
+const useView = ({
+  settings,
+  deckSize,
+  mouseDownIsMinimap,
+  metadataMatrixWidth = 0,
+}: UseViewProps) => {
   const [mouseXY, setMouseXY] = useState([0, 0]);
   const [zoomAxis, setZoomAxis] = useState("Y");
-
-  const baseViewState = useMemo(() => ({ ...viewState }), [viewState]);
 
   const controllerProps = useMemo(
     () => ({
@@ -49,6 +55,57 @@ const useView = ({ settings, deckSize, mouseDownIsMinimap }: UseViewProps) => {
     }),
     []
   );
+
+  const layout = useMemo(() => {
+    const totalWidth =
+      deckSize && Number.isFinite(deckSize.width) ? deckSize.width : window.innerWidth;
+    const mainAreaWidth = settings.treenomeEnabled ? totalWidth * 0.4 : totalWidth;
+    const clampedMetadataWidth = Math.max(
+      0,
+      Math.min(metadataMatrixWidth, Math.max(mainAreaWidth - 80, 0))
+    );
+    const mainViewWidth = Math.max(mainAreaWidth - clampedMetadataWidth, 0);
+    const metadataViewX = mainViewWidth;
+
+    return {
+      totalWidth,
+      mainAreaWidth,
+      mainViewWidth,
+      metadataViewX,
+      metadataMatrixWidth: clampedMetadataWidth,
+    };
+  }, [deckSize, metadataMatrixWidth, settings.treenomeEnabled]);
+
+  const deriveViewState = useCallback(
+    (canonicalViewState: ViewStateType): ViewStateType => {
+      const zoomY = getZoomY(canonicalViewState.zoom);
+      return {
+        ...canonicalViewState,
+        minimap: { zoom: -3, target: [250, 1000] },
+        "browser-main": {
+          zoom: [-3, zoomY],
+          target: [0, canonicalViewState.target[1]],
+        },
+        "metadata-matrix": {
+          zoom: [0, zoomY],
+          target: [layout.metadataMatrixWidth / 2, canonicalViewState.target[1]],
+          pitch: 0,
+          bearing: 0,
+        },
+      };
+    },
+    [layout.metadataMatrixWidth]
+  );
+
+  const [viewState, setViewState] = useState<ViewStateType>(() =>
+    deriveViewState(defaultViewState)
+  );
+
+  useEffect(() => {
+    setViewState((currentViewState) => deriveViewState(currentViewState));
+  }, [deriveViewState]);
+
+  const baseViewState = useMemo(() => ({ ...viewState }), [viewState]);
 
   const views = useMemo(() => {
     const vs = [];
@@ -86,10 +143,21 @@ const useView = ({ settings, deckSize, mouseDownIsMinimap }: UseViewProps) => {
       new OrthographicView({
         id: "main",
         controller: controllerProps,
-        width: settings.treenomeEnabled ? "40%" : "100%",
+        width: layout.mainViewWidth,
         initialViewState: viewState,
       } as StyledViewProps)
     );
+    if (layout.metadataMatrixWidth > 0) {
+      vs.push(
+        new OrthographicView({
+          id: "metadata-matrix",
+          controller: false,
+          x: layout.metadataViewX,
+          width: layout.metadataMatrixWidth,
+          initialViewState: viewState,
+        } as StyledViewProps)
+      );
+    }
     if (settings.treenomeEnabled) {
       vs.push(
         new OrthographicView({
@@ -101,29 +169,55 @@ const useView = ({ settings, deckSize, mouseDownIsMinimap }: UseViewProps) => {
       );
     }
     return vs;
-  }, [controllerProps, viewState, settings]);
+  }, [controllerProps, layout, viewState, settings]);
 
   const onViewStateChange = useCallback(
-    ({ viewState: newViewState, viewId, requestIsFromMinimapPan }: ViewStateChangeParameters<ViewStateType> & { requestIsFromMinimapPan?: boolean }) => {
+    ({
+      viewState: newViewState,
+      viewId,
+      requestIsFromMinimapPan,
+    }: ViewStateChangeParameters<ViewStateType> & {
+      requestIsFromMinimapPan?: boolean;
+    }) => {
       if (mouseDownIsMinimap && !requestIsFromMinimapPan) {
         return false;
       }
 
-      newViewState.minimap = { zoom: -3, target: [250, 1000] };
-      newViewState["browser-main"] = {
-        zoom: [
-          -3,
-          Array.isArray(newViewState.zoom)
-            ? newViewState.zoom[1]
-            : (newViewState.zoom as number),
-        ],
-        target: [0, (newViewState as any).target[1]],
-      };
-      setViewState(newViewState);
+      if (
+        viewId &&
+        viewId !== "main" &&
+        viewId !== "minimap" &&
+        viewId !== "browser-main" &&
+        !requestIsFromMinimapPan
+      ) {
+        return viewState;
+      }
 
-      return newViewState;
+      const canonicalViewState: ViewStateType =
+        viewId === "browser-main"
+          ? {
+              ...viewState,
+              zoom: [
+                Array.isArray(viewState.zoom) ? viewState.zoom[0] : viewState.zoom,
+                getZoomY(newViewState.zoom),
+              ],
+              target: [viewState.target[0], newViewState.target[1] as number],
+              pitch: viewState.pitch,
+              bearing: viewState.bearing,
+            }
+          : {
+              ...viewState,
+              zoom: newViewState.zoom,
+              target: newViewState.target as [number, number],
+              pitch: newViewState.pitch ?? viewState.pitch,
+              bearing: newViewState.bearing ?? viewState.bearing,
+            };
+      const derivedViewState = deriveViewState(canonicalViewState);
+      setViewState(derivedViewState);
+
+      return derivedViewState;
     },
-    [mouseDownIsMinimap]
+    [deriveViewState, mouseDownIsMinimap, viewState]
   );
 
   const zoomIncrement = useCallback(
@@ -138,15 +232,15 @@ const useView = ({ settings, deckSize, mouseDownIsMinimap }: UseViewProps) => {
             newZoom[0] = newZoom[0] + increment;
             newZoom[1] = newZoom[1] + increment;
           }
-          return { ...vs, zoom: newZoom } as ViewStateType;
+          return deriveViewState({ ...vs, zoom: newZoom } as ViewStateType);
         });
     },
-    [zoomAxis]
+    [deriveViewState, zoomAxis]
   );
 
   const zoomReset = useCallback(() => {
-    setViewState(defaultViewState);
-  }, []);
+    setViewState(deriveViewState(defaultViewState));
+  }, [deriveViewState]);
 
   return {
     viewState,
@@ -162,6 +256,7 @@ const useView = ({ settings, deckSize, mouseDownIsMinimap }: UseViewProps) => {
     setMouseXY,
     baseViewState,
     zoomReset,
+    layout,
   };
 };
 
@@ -181,4 +276,11 @@ export interface View {
   setMouseXY: React.Dispatch<React.SetStateAction<number[]>>;
   baseViewState: ViewState;
   zoomReset: () => void;
+  layout: {
+    totalWidth: number;
+    mainAreaWidth: number;
+    mainViewWidth: number;
+    metadataViewX: number;
+    metadataMatrixWidth: number;
+  };
 }

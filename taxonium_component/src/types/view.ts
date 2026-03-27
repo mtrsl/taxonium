@@ -13,6 +13,7 @@ export interface ViewState extends SubViewState {
   minimap?: SubViewState;
   "browser-main"?: SubViewState;
   "browser-axis"?: SubViewState;
+  "metadata-matrix"?: SubViewState;
   min_x?: number;
   max_x?: number;
   min_y?: number;
