@@ -101,8 +101,8 @@ export interface DynamicDataWithLookup {
 }
 
 export interface MetadataDensityField {
-  trueCounts: number[];
-  totalCounts: number[];
+  trueCounts: Uint32Array | number[];
+  totalCounts: Uint32Array | number[];
 }
 
 export interface MetadataDensityResponse {

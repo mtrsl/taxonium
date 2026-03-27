@@ -263,8 +263,8 @@ const getMetadataDensity = async ({ minY, maxY, height, fields }) => {
       fields.map((field) => [
         field,
         {
-          trueCounts: new Array(height).fill(0),
-          totalCounts: new Array(height).fill(0),
+          trueCounts: new Uint32Array(height),
+          totalCounts: new Uint32Array(height),
         },
       ])
     ),
@@ -277,31 +277,40 @@ const getMetadataDensity = async ({ minY, maxY, height, fields }) => {
     return result;
   }
 
+  const rowLowerBounds = new Uint32Array(height);
+  const rowUpperBounds = new Uint32Array(height);
+  for (let rowIndex = 0; rowIndex < height; rowIndex++) {
+    const rowUpperY = maxY - (rowIndex * (maxY - minY)) / height;
+    const rowLowerY = maxY - ((rowIndex + 1) * (maxY - minY)) / height;
+    const startTipIndex = Math.max(
+      0,
+      Math.min(
+        tipYPositions.length,
+        findFirstIndexAtOrAbove(tipYPositions, rowLowerY)
+      )
+    );
+    const endTipExclusive = Math.max(
+      startTipIndex,
+      Math.min(
+        tipYPositions.length,
+        findFirstIndexAtOrAbove(tipYPositions, rowUpperY)
+      )
+    );
+    rowLowerBounds[rowIndex] = startTipIndex;
+    rowUpperBounds[rowIndex] = endTipExclusive;
+  }
+
   fields.forEach((field) => {
     const prefixTrueCounts = ensureFieldTruePrefixCounts(
       metadataDensityIndex,
       field
     );
-    const trueCounts = new Array(height).fill(0);
-    const totalCounts = new Array(height).fill(0);
+    const trueCounts = new Uint32Array(height);
+    const totalCounts = new Uint32Array(height);
 
     for (let rowIndex = 0; rowIndex < height; rowIndex++) {
-      const rowUpperY = maxY - (rowIndex * (maxY - minY)) / height;
-      const rowLowerY = maxY - ((rowIndex + 1) * (maxY - minY)) / height;
-      const startTipIndex = Math.max(
-        0,
-        Math.min(
-          tipYPositions.length,
-          findFirstIndexAtOrAbove(tipYPositions, rowLowerY)
-        )
-      );
-      const endTipExclusive = Math.max(
-        startTipIndex,
-        Math.min(
-          tipYPositions.length,
-          findFirstIndexAtOrAbove(tipYPositions, rowUpperY)
-        )
-      );
+      const startTipIndex = rowLowerBounds[rowIndex];
+      const endTipExclusive = rowUpperBounds[rowIndex];
       totalCounts[rowIndex] = endTipExclusive - startTipIndex;
       trueCounts[rowIndex] =
         prefixTrueCounts[endTipExclusive] - prefixTrueCounts[startTipIndex];
@@ -428,10 +437,14 @@ onmessage = async (event) => {
     }
     if (data.type === "metadata_density") {
       const result = await getMetadataDensity(data);
+      const transfer = Object.values(result.fields).flatMap((field) => [
+        field.trueCounts.buffer,
+        field.totalCounts.buffer,
+      ]);
       postMessage({
         type: "metadata_density",
         data: { key: data.key, result },
-      });
+      }, transfer);
     }
     if (data.type === "visible_tip_count") {
       const result = await getVisibleTipCount(data);

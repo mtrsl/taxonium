@@ -7,7 +7,7 @@ import {
   SolidPolygonLayer,
 } from "@deck.gl/layers";
 
-import { useMemo, useCallback, useEffect, useState } from "react";
+import { useMemo, useCallback, useEffect, useRef, useState } from "react";
 import computeBounds from "../utils/computeBounds";
 import useTreenomeLayers from "./useTreenomeLayers";
 import getSVGfunction from "../utils/deckglToSvg";
@@ -64,11 +64,29 @@ const blendRgbTowardBackground = (
   ];
 };
 
+const blendRgbaColors = (
+  foreground: [number, number, number, number],
+  background: [number, number, number, number],
+  fraction: number
+): [number, number, number, number] => {
+  const clampedFraction = Math.max(0, Math.min(1, fraction));
+  const mix = 1 - clampedFraction;
+  return [
+    Math.round(foreground[0] * clampedFraction + background[0] * mix),
+    Math.round(foreground[1] * clampedFraction + background[1] * mix),
+    Math.round(foreground[2] * clampedFraction + background[2] * mix),
+    Math.round(foreground[3] * clampedFraction + background[3] * mix),
+  ];
+};
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
 const METADATA_BACKGROUND_RGBA: [number, number, number, number] = [
   244, 244, 244, 235,
+];
+const METADATA_BOX_FALSE_RGBA: [number, number, number, number] = [
+  255, 255, 255, 235,
 ];
 
 const getBoxRectangleTransitionProgress = (pixelsPerTip: number) =>
@@ -104,7 +122,14 @@ const getNextLocalMetadataRenderMode = (
   return "density";
 };
 
+type DensityCanvasCache = {
+  canvas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D;
+  imageData: ImageData;
+};
+
 const createMetadataDensityCanvas = ({
+  cacheRef,
   width,
   height,
   columnWidth,
@@ -116,6 +141,7 @@ const createMetadataDensityCanvas = ({
   maxY,
   isTruthyValue,
 }: {
+  cacheRef: { current: DensityCanvasCache | null };
   width: number;
   height: number;
   columnWidth: number;
@@ -137,58 +163,62 @@ const createMetadataDensityCanvas = ({
     return null;
   }
 
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d");
-  if (!context) {
-    return null;
+  let nextCache = cacheRef.current;
+  if (!nextCache) {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return null;
+    }
+    nextCache = {
+      canvas,
+      context,
+      imageData: context.createImageData(width, height),
+    };
   }
 
-  const imageData = context.createImageData(width, height);
+  if (nextCache.canvas.width !== width || nextCache.canvas.height !== height) {
+    nextCache.canvas.width = width;
+    nextCache.canvas.height = height;
+    nextCache.imageData = nextCache.context.createImageData(width, height);
+  }
+
+  const { canvas, context, imageData } = nextCache;
   const { data } = imageData;
+  data.fill(0);
 
-  for (let pixelIndex = 0; pixelIndex < data.length; pixelIndex += 4) {
-    data[pixelIndex] = METADATA_BACKGROUND_RGBA[0];
-    data[pixelIndex + 1] = METADATA_BACKGROUND_RGBA[1];
-    data[pixelIndex + 2] = METADATA_BACKGROUND_RGBA[2];
-    data[pixelIndex + 3] = METADATA_BACKGROUND_RGBA[3];
-  }
+  const fieldPixelSpans = matrixFields.map((field, fieldIndex) => ({
+    field,
+    xStart: Math.max(0, Math.floor(12 + fieldIndex * columnWidth + 1)),
+    xEnd: Math.min(width, Math.ceil(12 + (fieldIndex + 1) * columnWidth - 1)),
+  }));
 
-  matrixFields.forEach((field, fieldIndex) => {
-    const xStart = Math.max(0, Math.floor(12 + fieldIndex * columnWidth + 1));
-    const xEnd = Math.min(
-      width,
-      Math.ceil(12 + (fieldIndex + 1) * columnWidth - 1)
-    );
+  fieldPixelSpans.forEach(({ field, xStart, xEnd }) => {
 
     if (xEnd <= xStart) {
       return;
     }
 
-    const trueCounts = new Uint32Array(height);
-    const totalCounts = new Uint32Array(height);
     const precomputedField = densityData?.fields[field.field];
+    let trueCounts: Uint32Array | null = null;
+    let totalCounts: Uint32Array | null = null;
 
     if (
       precomputedField &&
       precomputedField.trueCounts.length > 0 &&
       precomputedField.totalCounts.length > 0
     ) {
-      const sourceHeight = Math.min(
-        precomputedField.trueCounts.length,
-        precomputedField.totalCounts.length
-      );
-      for (let rowIndex = 0; rowIndex < height; rowIndex++) {
-        const sourceRow = clamp(
-          Math.floor((rowIndex * sourceHeight) / Math.max(1, height)),
-          0,
-          sourceHeight - 1
-        );
-        trueCounts[rowIndex] = precomputedField.trueCounts[sourceRow];
-        totalCounts[rowIndex] = precomputedField.totalCounts[sourceRow];
-      }
+      trueCounts =
+        precomputedField.trueCounts instanceof Uint32Array
+          ? precomputedField.trueCounts
+          : Uint32Array.from(precomputedField.trueCounts);
+      totalCounts =
+        precomputedField.totalCounts instanceof Uint32Array
+          ? precomputedField.totalCounts
+          : Uint32Array.from(precomputedField.totalCounts);
     } else if (allowTipNodeFallback && tipNodes && tipNodes.length > 0) {
+      trueCounts = new Uint32Array(height);
+      totalCounts = new Uint32Array(height);
       for (let nodeIndex = 0; nodeIndex < tipNodes.length; nodeIndex++) {
         const node = tipNodes[nodeIndex];
         const intervalStartY =
@@ -220,14 +250,28 @@ const createMetadataDensityCanvas = ({
       }
     }
 
+    const sourceHeight = Math.min(
+      trueCounts?.length ?? 0,
+      totalCounts?.length ?? 0
+    );
+
     for (let rowIndex = 0; rowIndex < height; rowIndex++) {
-      const totalCount = totalCounts[rowIndex];
+      const sourceRow =
+        sourceHeight > 0
+          ? clamp(
+              Math.floor((rowIndex * sourceHeight) / Math.max(1, height)),
+              0,
+              sourceHeight - 1
+            )
+          : 0;
+      const totalCount =
+        sourceHeight > 0 && totalCounts ? totalCounts[sourceRow] : 0;
       const color =
         totalCount === 0
           ? METADATA_BACKGROUND_RGBA
           : blendWithBackground(
               field.color,
-              trueCounts[rowIndex] / totalCount,
+              ((trueCounts?.[sourceRow] ?? 0) as number) / totalCount,
               METADATA_BACKGROUND_RGBA
             );
 
@@ -242,7 +286,16 @@ const createMetadataDensityCanvas = ({
   });
 
   context.putImageData(imageData, 0, 0);
-  return canvas;
+  cacheRef.current = nextCache;
+  const presentationCanvas = document.createElement("canvas");
+  presentationCanvas.width = width;
+  presentationCanvas.height = height;
+  const presentationContext = presentationCanvas.getContext("2d");
+  if (!presentationContext) {
+    return canvas;
+  }
+  presentationContext.drawImage(canvas, 0, 0);
+  return presentationCanvas;
 };
 
 const getKeyStuff = (
@@ -840,6 +893,7 @@ const useLayers = ({
     data: MetadataDensityResponse;
     spanY: number;
   } | null>(null);
+  const densityCanvasCacheRef = useRef<DensityCanvasCache | null>(null);
 
   useEffect(() => {
     if (
@@ -868,22 +922,91 @@ const useLayers = ({
     };
   }, [backend, metadataDensityRequest, metadataDensityRequestKey]);
 
+  const sortedVisibleTipNodesForMatrix = useMemo(
+    () =>
+      backend.type === "server" && metadataRenderMode === "density"
+        ? [...visibleTipNodesForMatrix].sort((a: Node, b: Node) => a.y - b.y)
+        : [],
+    [backend.type, metadataRenderMode, visibleTipNodesForMatrix]
+  );
+
+  const matrixCells = useMemo<MetadataMatrixCell[]>(
+    () =>
+      metadataRenderMode === "density"
+        ? []
+        : visibleTipNodesForMatrix.flatMap((node: Node) =>
+            metadataMatrix.matrixFields.map((field, index) => ({
+              node,
+              field: field.field,
+              x:
+                12 +
+                index * metadataMatrix.columnWidth +
+                metadataMatrix.columnWidth / 2,
+              y: node.y,
+              isTrue: metadataMatrix.isTruthyValue(node[field.field]),
+              color: field.color,
+            }))
+          ),
+    [
+      metadataMatrix.columnWidth,
+      metadataMatrix.isTruthyValue,
+      metadataMatrix.matrixFields,
+      metadataRenderMode,
+      visibleTipNodesForMatrix,
+    ]
+  );
+
+  const densityPayload =
+    backend.type === "local"
+      ? resolvedMetadataDensityData?.data ?? null
+      : metadataDensityData &&
+          metadataDensityRequestKey &&
+          metadataDensityData.key === metadataDensityRequestKey &&
+          metadataDensityData.data.minY === densityMinY &&
+          metadataDensityData.data.maxY === densityMaxY
+        ? metadataDensityData.data
+        : null;
+
+  const densityCanvas = useMemo(
+    () =>
+      metadataMatrix.isEnabled &&
+      visibleTipNodesForMatrix.length > 0 &&
+      metadataRenderMode === "density"
+        ? createMetadataDensityCanvas({
+            cacheRef: densityCanvasCacheRef,
+            width: Math.max(1, Math.round(metadataMatrix.panelWidth)),
+            height: Math.max(1, Math.round(deckSize?.height ?? 1)),
+            columnWidth: metadataMatrix.columnWidth,
+            matrixFields: metadataMatrix.matrixFields,
+            tipNodes:
+              backend.type === "server"
+                ? sortedVisibleTipNodesForMatrix
+                : undefined,
+            densityData: densityPayload,
+            allowTipNodeFallback: backend.type === "server",
+            minY: densityMinY,
+            maxY: densityMaxY,
+            isTruthyValue: metadataMatrix.isTruthyValue,
+          })
+        : null,
+    [
+      backend.type,
+      deckSize?.height,
+      densityMaxY,
+      densityMinY,
+      densityPayload,
+      metadataMatrix.columnWidth,
+      metadataMatrix.isEnabled,
+      metadataMatrix.isTruthyValue,
+      metadataMatrix.matrixFields,
+      metadataMatrix.panelWidth,
+      metadataRenderMode,
+      sortedVisibleTipNodesForMatrix,
+      visibleTipNodesForMatrix.length,
+    ]
+  );
+
   if (metadataMatrix.isEnabled && visibleTipNodesForMatrix.length > 0) {
-    const sortedVisibleTipNodesForMatrix = [...visibleTipNodesForMatrix].sort(
-      (a: Node, b: Node) => a.y - b.y
-    );
-    const matrixCells: MetadataMatrixCell[] = visibleTipNodesForMatrix.flatMap(
-      (node: Node) =>
-        metadataMatrix.matrixFields.map((field, index) => ({
-          node,
-          field: field.field,
-          x:
-            12 + index * metadataMatrix.columnWidth + metadataMatrix.columnWidth / 2,
-          y: node.y,
-          isTrue: metadataMatrix.isTruthyValue(node[field.field]),
-          color: field.color,
-        }))
-    );
 
     if (metadataRenderMode === "boxes" || metadataRenderMode === "rectangles") {
       const isLocalRectangleMode =
@@ -908,6 +1031,11 @@ const useLayers = ({
         metadataMatrix.cellSize / 2
       );
       const boxHalfWidth = metadataMatrix.cellSize / 2;
+      const localFalseFillColor = blendRgbaColors(
+        METADATA_BOX_FALSE_RGBA,
+        METADATA_BACKGROUND_RGBA,
+        boxRectangleTransitionProgress
+      );
       const halfWidth =
         isLocalBoxRectangleMode
           ? rectangleHalfWidth +
@@ -973,8 +1101,10 @@ const useLayers = ({
         getFillColor: (d: MetadataMatrixCell) =>
           d.isTrue
             ? [...d.color, 255]
-            : metadataRenderMode === "boxes"
-              ? [255, 255, 255, 235]
+            : isLocalBoxRectangleMode
+              ? localFalseFillColor
+              : metadataRenderMode === "boxes"
+                ? METADATA_BOX_FALSE_RGBA
               : METADATA_BACKGROUND_RGBA,
         getLineColor: (d: MetadataMatrixCell) =>
           isLocalBoxRectangleMode
@@ -994,7 +1124,7 @@ const useLayers = ({
             heightPixels,
             zoomY,
           ],
-          getFillColor: [metadataMatrix.matrixFields],
+          getFillColor: [metadataMatrix.matrixFields, boxRectangleTransitionProgress],
           getLineColor: [
             metadataMatrix.matrixFields,
             boxRectangleTransitionProgress,
@@ -1035,31 +1165,6 @@ const useLayers = ({
         },
       });
     } else {
-      const densityPayload =
-        backend.type === "local"
-          ? resolvedMetadataDensityData?.data ?? null
-          : metadataDensityData &&
-              metadataDensityRequestKey &&
-              metadataDensityData.key === metadataDensityRequestKey &&
-              metadataDensityData.data.minY === densityMinY &&
-              metadataDensityData.data.maxY === densityMaxY
-            ? metadataDensityData.data
-            : null;
-
-      const densityCanvas = createMetadataDensityCanvas({
-        width: Math.max(1, Math.round(metadataMatrix.panelWidth)),
-        height: Math.max(1, Math.round(deckSize?.height ?? 1)),
-        columnWidth: metadataMatrix.columnWidth,
-        matrixFields: metadataMatrix.matrixFields,
-        tipNodes:
-          backend.type === "server" ? sortedVisibleTipNodesForMatrix : undefined,
-        densityData: densityPayload,
-        allowTipNodeFallback: backend.type === "server",
-        minY: densityMinY,
-        maxY: densityMaxY,
-        isTruthyValue: metadataMatrix.isTruthyValue,
-      });
-
       layers.push({
         layerType: "BitmapLayer",
         id: "metadata-matrix-density",
