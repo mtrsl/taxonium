@@ -7,12 +7,18 @@ import {
   SolidPolygonLayer,
 } from "@deck.gl/layers";
 
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useEffect, useState } from "react";
 import computeBounds from "../utils/computeBounds";
 import useTreenomeLayers from "./useTreenomeLayers";
 import getSVGfunction from "../utils/deckglToSvg";
 import type { Node } from "../types/node";
-import type { NodeLookupData, Config, DynamicData } from "../types/backend";
+import type {
+  NodeLookupData,
+  Config,
+  DynamicData,
+  Backend,
+  MetadataDensityResponse,
+} from "../types/backend";
 import type { DeckSize, HoverInfo } from "../types/common";
 import type { ColorHook, ColorBy } from "../types/color";
 import type { Settings } from "../types/settings";
@@ -49,6 +55,7 @@ const createMetadataDensityCanvas = ({
   columnWidth,
   matrixFields,
   tipNodes,
+  densityData,
   minY,
   maxY,
   isTruthyValue,
@@ -57,7 +64,8 @@ const createMetadataDensityCanvas = ({
   height: number;
   columnWidth: number;
   matrixFields: MetadataMatrix["matrixFields"];
-  tipNodes: Node[];
+  tipNodes?: Node[];
+  densityData?: MetadataDensityResponse | null;
   minY: number;
   maxY: number;
   isTruthyValue: (value: unknown) => boolean;
@@ -103,33 +111,74 @@ const createMetadataDensityCanvas = ({
 
     const trueCounts = new Uint32Array(height);
     const totalCounts = new Uint32Array(height);
+    const precomputedField = densityData?.fields[field.field];
 
-    for (let nodeIndex = 0; nodeIndex < tipNodes.length; nodeIndex++) {
-      const node = tipNodes[nodeIndex];
-      const intervalStartY =
-        nodeIndex === 0 ? minY : (tipNodes[nodeIndex - 1].y + node.y) / 2;
-      const intervalEndY =
-        nodeIndex === tipNodes.length - 1
-          ? maxY
-          : (node.y + tipNodes[nodeIndex + 1].y) / 2;
-
-      const intervalStartNormalized = (intervalStartY - minY) / (maxY - minY);
-      const intervalEndNormalized = (intervalEndY - minY) / (maxY - minY);
-      const startRow = clamp(
-        height - 1 - Math.floor(intervalEndNormalized * height),
-        0,
-        height - 1
+    if (
+      precomputedField &&
+      precomputedField.trueCounts.length > 0 &&
+      precomputedField.totalCounts.length > 0
+    ) {
+      const sourceHeight = Math.min(
+        precomputedField.trueCounts.length,
+        precomputedField.totalCounts.length
       );
-      const endRow = clamp(
-        height - 1 - Math.floor(intervalStartNormalized * height),
-        0,
-        height - 1
-      );
+      for (let rowIndex = 0; rowIndex < height; rowIndex++) {
+        const sourceStart = (rowIndex * sourceHeight) / Math.max(1, height);
+        const sourceEnd = ((rowIndex + 1) * sourceHeight) / Math.max(1, height);
+        const firstSourceRow = Math.floor(sourceStart);
+        const lastSourceRow = Math.min(
+          sourceHeight - 1,
+          Math.ceil(sourceEnd) - 1
+        );
+        let weightedTrue = 0;
+        let weightedTotal = 0;
 
-      for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
-        totalCounts[rowIndex] += 1;
-        if (isTruthyValue(node[field.field])) {
-          trueCounts[rowIndex] += 1;
+        for (
+          let sourceRow = firstSourceRow;
+          sourceRow <= lastSourceRow;
+          sourceRow++
+        ) {
+          const overlap =
+            Math.min(sourceEnd, sourceRow + 1) -
+            Math.max(sourceStart, sourceRow);
+          if (overlap <= 0) {
+            continue;
+          }
+          weightedTrue += precomputedField.trueCounts[sourceRow] * overlap;
+          weightedTotal += precomputedField.totalCounts[sourceRow] * overlap;
+        }
+
+        trueCounts[rowIndex] = Math.round(weightedTrue);
+        totalCounts[rowIndex] = Math.round(weightedTotal);
+      }
+    } else if (tipNodes && tipNodes.length > 0) {
+      for (let nodeIndex = 0; nodeIndex < tipNodes.length; nodeIndex++) {
+        const node = tipNodes[nodeIndex];
+        const intervalStartY =
+          nodeIndex === 0 ? minY : (tipNodes[nodeIndex - 1].y + node.y) / 2;
+        const intervalEndY =
+          nodeIndex === tipNodes.length - 1
+            ? maxY
+            : (node.y + tipNodes[nodeIndex + 1].y) / 2;
+
+        const intervalStartNormalized = (intervalStartY - minY) / (maxY - minY);
+        const intervalEndNormalized = (intervalEndY - minY) / (maxY - minY);
+        const startRow = clamp(
+          height - 1 - Math.floor(intervalEndNormalized * height),
+          0,
+          height - 1
+        );
+        const endRow = clamp(
+          height - 1 - Math.floor(intervalStartNormalized * height),
+          0,
+          height - 1
+        );
+
+        for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
+          totalCounts[rowIndex] += 1;
+          if (isTruthyValue(node[field.field])) {
+            trueCounts[rowIndex] += 1;
+          }
         }
       }
     }
@@ -184,6 +233,7 @@ const getKeyStuff = (
 };
 
 interface UseLayersProps {
+  backend: Backend;
   data: DynamicData;
   search: SearchState;
   viewState: ViewState;
@@ -208,6 +258,7 @@ interface UseLayersProps {
 }
 
 const useLayers = ({
+  backend,
   data,
   search,
   viewState,
@@ -621,6 +672,57 @@ const useLayers = ({
     visibleTipMaxY - visibleTipMinY
   );
 
+  const metadataDensityRequest = useMemo(() => {
+    if (
+      !metadataMatrix.isEnabled ||
+      metadataRenderMode !== "density" ||
+      backend.type !== "local" ||
+      !backend.queryMetadataDensity ||
+      metadataMatrix.matrixFields.length === 0 ||
+      visibleTipNodesForMatrix.length === 0
+    ) {
+      return null;
+    }
+
+    return {
+      minY: visibleTipMinY,
+      maxY: visibleTipMinY + visibleTipSpanY,
+      height: Math.max(1, Math.round(deckSize?.height ?? 1)),
+      fields: metadataMatrix.matrixFields.map((field) => field.field),
+    };
+  }, [
+    backend,
+    deckSize?.height,
+    metadataMatrix.isEnabled,
+    metadataMatrix.matrixFields,
+    metadataRenderMode,
+    visibleTipMinY,
+    visibleTipNodesForMatrix.length,
+    visibleTipSpanY,
+  ]);
+
+  const [metadataDensityData, setMetadataDensityData] =
+    useState<MetadataDensityResponse | null>(null);
+
+  useEffect(() => {
+    if (!metadataDensityRequest || !backend.queryMetadataDensity) {
+      setMetadataDensityData(null);
+      return;
+    }
+
+    let cancelled = false;
+    setMetadataDensityData(null);
+    backend.queryMetadataDensity(metadataDensityRequest, (result) => {
+      if (!cancelled) {
+        setMetadataDensityData(result);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backend, metadataDensityRequest]);
+
   if (metadataMatrix.isEnabled && visibleTipNodesForMatrix.length > 0) {
     const sortedVisibleTipNodesForMatrix = [...visibleTipNodesForMatrix].sort(
       (a: Node, b: Node) => a.y - b.y
@@ -717,6 +819,12 @@ const useLayers = ({
         columnWidth: metadataMatrix.columnWidth,
         matrixFields: metadataMatrix.matrixFields,
         tipNodes: sortedVisibleTipNodesForMatrix,
+        densityData:
+          metadataDensityData &&
+          metadataDensityData.minY === visibleTipMinY &&
+          metadataDensityData.maxY === visibleTipMinY + visibleTipSpanY
+            ? metadataDensityData
+            : null,
         minY: visibleTipMinY,
         maxY: visibleTipMinY + visibleTipSpanY,
         isTruthyValue: metadataMatrix.isTruthyValue,

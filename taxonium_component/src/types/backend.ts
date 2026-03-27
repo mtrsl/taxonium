@@ -100,6 +100,18 @@ export interface DynamicDataWithLookup {
   [key: string]: unknown;
 }
 
+export interface MetadataDensityField {
+  trueCounts: number[];
+  totalCounts: number[];
+}
+
+export interface MetadataDensityResponse {
+  fields: Record<string, MetadataDensityField>;
+  minY: number;
+  maxY: number;
+  height: number;
+}
+
 export interface StatusMessage {
   percentage?: number;
   message?: string | null;
@@ -128,6 +140,15 @@ export interface BaseBackend {
     nodeId: string | number,
     selectedKey: string,
     callback: (err: unknown, data: unknown) => void
+  ): void;
+  queryMetadataDensity?(
+    args: {
+      minY: number;
+      maxY: number;
+      height: number;
+      fields: string[];
+    },
+    callback: (res: MetadataDensityResponse) => void
   ): void;
   getNextstrainJson(nodeId: string | number, config: Config): void;
   type: "local" | "server";

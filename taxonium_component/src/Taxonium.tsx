@@ -310,6 +310,7 @@ function Taxonium({
             }
           >
             <Deck
+              backend={backend}
               statusMessage={backend.statusMessage}
               data={data}
               search={search}

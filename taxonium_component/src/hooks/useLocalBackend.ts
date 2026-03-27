@@ -6,6 +6,7 @@ import type {
   SearchResult,
   QueryBounds,
   LocalBackend,
+  MetadataDensityResponse,
 } from "../types/backend";
 import type {
   StatusData,
@@ -15,6 +16,7 @@ import type {
   DetailsData,
   ListData,
   NextStrainData,
+  MetadataDensityData,
   LocalBackendMessage,
 } from "../types/localBackendWorker";
 import type { Node, Mutation } from "../types/node";
@@ -56,6 +58,10 @@ let onNextStrainReceipt: (receivedData: NextStrainData["data"]) => void = (
 };
 
 let searchSetters: Record<string, (data: SearchResult) => void> = {};
+let metadataDensitySetters: Record<
+  string,
+  (data: MetadataDensityResponse) => void
+> = {};
 
 worker.onmessage = (event: MessageEvent<LocalBackendMessage>) => {
   const data = event.data;
@@ -82,6 +88,9 @@ worker.onmessage = (event: MessageEvent<LocalBackendMessage>) => {
       break;
     case "nextstrain":
       onNextStrainReceipt(data.data);
+      break;
+    case "metadata_density":
+      metadataDensitySetters[data.data.key]?.(data.data.result);
       break;
     default:
       break;
@@ -223,6 +232,31 @@ function useLocalBackend(
     });
   }, []);
 
+  const queryMetadataDensity = useCallback(
+    (
+      args: {
+        minY: number;
+        maxY: number;
+        height: number;
+        fields: string[];
+      },
+      callback: (res: MetadataDensityResponse) => void
+    ) => {
+      const key = JSON.stringify(args);
+      worker.postMessage({
+        type: "metadata_density",
+        key,
+        ...args,
+      });
+
+      metadataDensitySetters[key] = (receivedData) => {
+        callback(receivedData);
+        delete metadataDensitySetters[key];
+      };
+    },
+    []
+  );
+
   return useMemo(() => {
     return {
       queryNodes,
@@ -232,6 +266,7 @@ function useLocalBackend(
       statusMessage,
       setStatusMessage,
       getTipAtts,
+      queryMetadataDensity,
       getNextstrainJson,
       type: "local",
     };
@@ -243,6 +278,7 @@ function useLocalBackend(
     statusMessage,
     setStatusMessage,
     getTipAtts,
+    queryMetadataDensity,
     getNextstrainJson,
   ]);
 }

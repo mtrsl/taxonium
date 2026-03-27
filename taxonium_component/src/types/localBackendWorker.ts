@@ -37,6 +37,14 @@ export interface NextStrainData {
   data: Record<string, unknown>;
 }
 
+export interface MetadataDensityData {
+  type: "metadata_density";
+  data: {
+    key: string;
+    result: import("./backend").MetadataDensityResponse;
+  };
+}
+
 export type LocalBackendMessage =
   | StatusData
   | QueryData
@@ -44,4 +52,5 @@ export type LocalBackendMessage =
   | ConfigData
   | DetailsData
   | ListData
-  | NextStrainData;
+  | NextStrainData
+  | MetadataDensityData;

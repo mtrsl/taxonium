@@ -37,6 +37,8 @@ const cache_helper = {
 
 let processedUploadedData;
 
+const TRUE_VALUES = new Set(["true", "1", "yes", "y", "t"]);
+
 const sendStatusMessage = (status_obj) => {
   postMessage({
     type: "status",
@@ -56,6 +58,99 @@ const waitForProcessedData = async () => {
       }, 100);
     });
   }
+};
+
+const findFirstIndexAtOrAbove = (values, target) => {
+  let low = 0;
+  let high = values.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (values[mid] < target) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+};
+
+const getNodesInYRange = (nodes, y_positions, minY, maxY) => {
+  if (!Array.isArray(nodes) || !Array.isArray(y_positions) || minY > maxY) {
+    return [];
+  }
+
+  const startIndex = findFirstIndexAtOrAbove(y_positions, minY);
+  const endExclusive = findFirstIndexAtOrAbove(y_positions, maxY + Number.EPSILON);
+  return nodes.slice(startIndex, endExclusive);
+};
+
+const normalizeMetadataValue = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return String(value).trim().toLowerCase();
+};
+
+const isTruthyMetadataValue = (value) =>
+  TRUE_VALUES.has(normalizeMetadataValue(value));
+
+const createMetadataDensityIndex = (nodes) => {
+  const tipNodes = nodes.filter((node) => node.num_tips === 1 || node.is_tip);
+  return {
+    tipNodes,
+    tipYPositions: tipNodes.map((node) => node.y),
+    fieldPyramids: {},
+  };
+};
+
+const buildFieldDensityPyramid = (tipNodes, field) => {
+  const levels = [];
+  const levelZero = new Uint8Array(tipNodes.length);
+
+  for (let index = 0; index < tipNodes.length; index++) {
+    levelZero[index] = isTruthyMetadataValue(tipNodes[index][field]) ? 255 : 0;
+  }
+
+  levels.push(levelZero);
+
+  let currentLevel = levelZero;
+  while (currentLevel.length > 1) {
+    const nextLevel = new Uint8Array(Math.ceil(currentLevel.length / 2));
+    for (let index = 0; index < nextLevel.length; index++) {
+      const firstValue = currentLevel[index * 2];
+      const secondIndex = index * 2 + 1;
+      const secondValue =
+        secondIndex < currentLevel.length ? currentLevel[secondIndex] : 0;
+      const divisor = secondIndex < currentLevel.length ? 2 : 1;
+      nextLevel[index] = Math.round((firstValue + secondValue) / divisor);
+    }
+    levels.push(nextLevel);
+    currentLevel = nextLevel;
+  }
+
+  return { levels };
+};
+
+const ensureFieldDensityPyramid = (metadataDensityIndex, field) => {
+  if (!metadataDensityIndex.fieldPyramids[field]) {
+    metadataDensityIndex.fieldPyramids[field] = buildFieldDensityPyramid(
+      metadataDensityIndex.tipNodes,
+      field
+    );
+  }
+  return metadataDensityIndex.fieldPyramids[field];
+};
+
+const chooseDensityLevel = (levels, visibleTipCount, targetHeight) => {
+  const maxBins = Math.max(1, targetHeight * 2);
+  let level = 0;
+  while (
+    level + 1 < levels.length &&
+    Math.ceil(visibleTipCount / 2 ** (level + 1)) > maxBins
+  ) {
+    level += 1;
+  }
+  return level;
 };
 
 export const queryNodes = async (boundsForQueries) => {
@@ -183,6 +278,80 @@ const getList = async (node_id, att) => {
   return atts;
 };
 
+const getMetadataDensity = async ({ minY, maxY, height, fields }) => {
+  await waitForProcessedData();
+  if (!processedUploadedData.metadataDensityIndex) {
+    processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
+      processedUploadedData.nodes
+    );
+  }
+  const { metadataDensityIndex } = processedUploadedData;
+  const { tipYPositions } = metadataDensityIndex;
+
+  const result = {
+    fields: Object.fromEntries(
+      fields.map((field) => [
+        field,
+        {
+          trueCounts: new Array(height).fill(0),
+          totalCounts: new Array(height).fill(0),
+        },
+      ])
+    ),
+    minY,
+    maxY,
+    height,
+  };
+
+  if (tipYPositions.length === 0 || maxY <= minY || height <= 0) {
+    return result;
+  }
+
+  fields.forEach((field) => {
+    const startTipIndex = Math.max(
+      0,
+      Math.min(tipYPositions.length - 1, findFirstIndexAtOrAbove(tipYPositions, minY))
+    );
+    const endTipExclusive = Math.max(
+      startTipIndex + 1,
+      Math.min(
+        tipYPositions.length,
+        findFirstIndexAtOrAbove(tipYPositions, maxY + Number.EPSILON)
+      )
+    );
+    const visibleTipCount = endTipExclusive - startTipIndex;
+    const fieldPyramid = ensureFieldDensityPyramid(metadataDensityIndex, field);
+    const chosenLevel = chooseDensityLevel(
+      fieldPyramid.levels,
+      visibleTipCount,
+      height
+    );
+    const levelData = fieldPyramid.levels[chosenLevel];
+    const binSize = 2 ** chosenLevel;
+    const startBin = Math.max(
+      0,
+      Math.min(levelData.length - 1, Math.floor(startTipIndex / binSize))
+    );
+    const endBinExclusive = Math.max(
+      startBin + 1,
+      Math.min(levelData.length, Math.ceil(endTipExclusive / binSize))
+    );
+    const slicedLevel = levelData.subarray(startBin, endBinExclusive);
+
+    result.fields[field] = {
+      trueCounts: Array.from(slicedLevel),
+      totalCounts: new Array(slicedLevel.length).fill(255),
+    };
+  });
+
+  result.height = Math.max(
+    1,
+    ...Object.values(result.fields).map((fieldResult) => fieldResult.trueCounts.length)
+  );
+
+  return result;
+};
+
 onmessage = async (event) => {
   //Process uploaded data:
   const { data } = event;
@@ -200,6 +369,9 @@ onmessage = async (event) => {
       streamValues,
       Buffer
     );
+    processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
+      processedUploadedData.nodes
+    );
 
   } else if (
     data.type === "upload" &&
@@ -212,6 +384,9 @@ onmessage = async (event) => {
       data.data,
       sendStatusMessage
     );
+    processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
+      processedUploadedData.nodes
+    );
   } else if (
     data.type === "upload" &&
     data.data &&
@@ -221,6 +396,9 @@ onmessage = async (event) => {
     processedUploadedData = await processNextstrain(
       data.data,
       sendStatusMessage
+    );
+    processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
+      processedUploadedData.nodes
     );
   } else if (data.type === "upload" && data.data && data.data.filename) {
     sendStatusMessage({
@@ -256,6 +434,13 @@ onmessage = async (event) => {
         processedUploadedData.mutations
       );
       postMessage({ type: "nextstrain", data: result });
+    }
+    if (data.type === "metadata_density") {
+      const result = await getMetadataDensity(data);
+      postMessage({
+        type: "metadata_density",
+        data: { key: data.key, result },
+      });
     }
   }
 };

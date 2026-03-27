@@ -30,7 +30,7 @@ import FirefoxWarning from "./components/FirefoxWarning";
 import { JBrowseErrorBoundary } from "./components/JBrowseErrorBoundary";
 import ColorSettingModal from "./components/ColorSettingModal";
 import Key from "./components/Key";
-import type { StatusMessage, DynamicData, Config } from "./types/backend";
+import type { StatusMessage, DynamicData, Config, Backend } from "./types/backend";
 import type { DeckSize, HoverInfo } from "./types/common";
 import type { Node, Mutation } from "./types/node";
 import type { ColorHook, ColorBy } from "./types/color";
@@ -40,6 +40,7 @@ const MemoizedKey = React.memo(Key);
 
 
 export interface DeckProps {
+  backend: Backend;
   data: DynamicData;
   search: SearchState;
   treenomeState: TreenomeState;
@@ -69,6 +70,7 @@ export interface DeckProps {
 }
 
 function Deck({
+  backend,
   data,
   search,
   treenomeState,
@@ -236,6 +238,7 @@ function Deck({
   );
 
   const { layers, layerFilter, keyStuff, triggerSVGdownload } = useLayers({
+    backend,
     data,
     search,
     viewState,
