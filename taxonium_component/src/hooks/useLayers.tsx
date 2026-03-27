@@ -1,4 +1,5 @@
 import {
+  BitmapLayer,
   LineLayer,
   ScatterplotLayer,
   PolygonLayer,
@@ -22,7 +23,6 @@ import type { ViewState } from "../types/view";
 import type {
   MetadataMatrix,
   MetadataMatrixCell,
-  MetadataMatrixDensityBin,
   MetadataMatrixRenderMode,
 } from "../types/metadataMatrix";
 
@@ -42,6 +42,118 @@ const blendWithWhite = (
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
+
+const createMetadataDensityCanvas = ({
+  width,
+  height,
+  columnWidth,
+  matrixFields,
+  tipNodes,
+  minY,
+  maxY,
+  isTruthyValue,
+}: {
+  width: number;
+  height: number;
+  columnWidth: number;
+  matrixFields: MetadataMatrix["matrixFields"];
+  tipNodes: Node[];
+  minY: number;
+  maxY: number;
+  isTruthyValue: (value: unknown) => boolean;
+}): HTMLCanvasElement | null => {
+  if (
+    typeof document === "undefined" ||
+    width <= 0 ||
+    height <= 0 ||
+    matrixFields.length === 0 ||
+    maxY <= minY
+  ) {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return null;
+  }
+
+  const imageData = context.createImageData(width, height);
+  const { data } = imageData;
+
+  for (let pixelIndex = 0; pixelIndex < data.length; pixelIndex += 4) {
+    data[pixelIndex] = 248;
+    data[pixelIndex + 1] = 248;
+    data[pixelIndex + 2] = 248;
+    data[pixelIndex + 3] = 180;
+  }
+
+  matrixFields.forEach((field, fieldIndex) => {
+    const xStart = Math.max(0, Math.floor(12 + fieldIndex * columnWidth + 1));
+    const xEnd = Math.min(
+      width,
+      Math.ceil(12 + (fieldIndex + 1) * columnWidth - 1)
+    );
+
+    if (xEnd <= xStart) {
+      return;
+    }
+
+    const trueCounts = new Uint32Array(height);
+    const totalCounts = new Uint32Array(height);
+
+    for (let nodeIndex = 0; nodeIndex < tipNodes.length; nodeIndex++) {
+      const node = tipNodes[nodeIndex];
+      const intervalStartY =
+        nodeIndex === 0 ? minY : (tipNodes[nodeIndex - 1].y + node.y) / 2;
+      const intervalEndY =
+        nodeIndex === tipNodes.length - 1
+          ? maxY
+          : (node.y + tipNodes[nodeIndex + 1].y) / 2;
+
+      const intervalStartNormalized = (intervalStartY - minY) / (maxY - minY);
+      const intervalEndNormalized = (intervalEndY - minY) / (maxY - minY);
+      const startRow = clamp(
+        height - 1 - Math.floor(intervalEndNormalized * height),
+        0,
+        height - 1
+      );
+      const endRow = clamp(
+        height - 1 - Math.floor(intervalStartNormalized * height),
+        0,
+        height - 1
+      );
+
+      for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
+        totalCounts[rowIndex] += 1;
+        if (isTruthyValue(node[field.field])) {
+          trueCounts[rowIndex] += 1;
+        }
+      }
+    }
+
+    for (let rowIndex = 0; rowIndex < height; rowIndex++) {
+      const totalCount = totalCounts[rowIndex];
+      const color =
+        totalCount === 0
+          ? ([248, 248, 248, 180] as const)
+          : blendWithWhite(field.color, trueCounts[rowIndex] / totalCount);
+
+      for (let x = xStart; x < xEnd; x++) {
+        const pixelOffset = (rowIndex * width + x) * 4;
+        data[pixelOffset] = color[0];
+        data[pixelOffset + 1] = color[1];
+        data[pixelOffset + 2] = color[2];
+        data[pixelOffset + 3] = color[3];
+      }
+    }
+  });
+
+  context.putImageData(imageData, 0, 0);
+  return canvas;
+};
 
 const getKeyStuff = (
   getNodeColorField: (node: Node, data: NodeLookupData) => string | number,
@@ -461,26 +573,59 @@ const useLayers = ({
     [detailed_scatter_data]
   );
 
+  const visibleTipNodesForMatrix = useMemo(
+    () =>
+      tipNodesForMatrix.filter(
+        (node: Node) =>
+          node.y >= computedViewState.min_y && node.y <= computedViewState.max_y,
+      ),
+    [computedViewState.max_y, computedViewState.min_y, tipNodesForMatrix]
+  );
+
   const pixelsPerTip =
-    deckSize && deckSize.height > 0 && tipNodesForMatrix.length > 0
-      ? deckSize.height / tipNodesForMatrix.length
+    deckSize && deckSize.height > 0 && visibleTipNodesForMatrix.length > 0
+      ? deckSize.height / visibleTipNodesForMatrix.length
       : Number.POSITIVE_INFINITY;
 
   const metadataRenderMode: MetadataMatrixRenderMode = useMemo(() => {
-    if (pixelsPerTip >= 10) {
+    if (pixelsPerTip >= 16) {
       return "boxes";
     }
-    if (pixelsPerTip >= 4) {
+    if (pixelsPerTip >= 8) {
       return "rectangles";
     }
-    if (pixelsPerTip >= 0.75) {
+    if (pixelsPerTip >= 3) {
       return "strips";
     }
     return "density";
   }, [pixelsPerTip]);
 
-  if (metadataMatrix.isEnabled && tipNodesForMatrix.length > 0) {
-    const matrixCells: MetadataMatrixCell[] = tipNodesForMatrix.flatMap(
+  const visibleTipMinY = useMemo(
+    () =>
+      visibleTipNodesForMatrix.length > 0
+        ? Math.min(...visibleTipNodesForMatrix.map((node: Node) => node.y))
+        : computedViewState.min_y,
+    [computedViewState.min_y, visibleTipNodesForMatrix]
+  );
+
+  const visibleTipMaxY = useMemo(
+    () =>
+      visibleTipNodesForMatrix.length > 0
+        ? Math.max(...visibleTipNodesForMatrix.map((node: Node) => node.y))
+        : computedViewState.max_y,
+    [computedViewState.max_y, visibleTipNodesForMatrix]
+  );
+
+  const visibleTipSpanY = Math.max(
+    pixelToWorldY(1),
+    visibleTipMaxY - visibleTipMinY
+  );
+
+  if (metadataMatrix.isEnabled && visibleTipNodesForMatrix.length > 0) {
+    const sortedVisibleTipNodesForMatrix = [...visibleTipNodesForMatrix].sort(
+      (a: Node, b: Node) => a.y - b.y
+    );
+    const matrixCells: MetadataMatrixCell[] = visibleTipNodesForMatrix.flatMap(
       (node: Node) =>
         metadataMatrix.matrixFields.map((field, index) => ({
           node,
@@ -566,89 +711,40 @@ const useLayers = ({
         },
       });
     } else {
-      const maxDensityBins = 2048;
-      const densityBinPixelHeight = Math.max(
-        1,
-        Math.ceil(
-          clamp(1 + (0.75 - pixelsPerTip) * 6, 1, 6) *
-            Math.max(1, (deckSize?.height ?? 1) / maxDensityBins)
-        )
-      );
-      const densityBinCount = Math.max(
-        1,
-        Math.min(
-          maxDensityBins,
-          Math.ceil((deckSize?.height ?? 1) / densityBinPixelHeight)
-        )
-      );
-      const binWorldHeight = Math.max(
-        pixelToWorldY(1),
-        (computedViewState.max_y - computedViewState.min_y) / densityBinCount
-      );
-      const densityBins: MetadataMatrixDensityBin[] = [];
-
-      metadataMatrix.matrixFields.forEach((field, fieldIndex) => {
-        const bins = Array.from({ length: densityBinCount }, (_, binIndex) => ({
-          field: field.field,
-          x:
-            12 +
-            fieldIndex * metadataMatrix.columnWidth +
-            metadataMatrix.columnWidth / 2,
-          y0: computedViewState.min_y + binIndex * binWorldHeight,
-          y1: computedViewState.min_y + (binIndex + 1) * binWorldHeight,
-          trueCount: 0,
-          totalCount: 0,
-          fraction: 0,
-          color: field.color,
-        }));
-
-        tipNodesForMatrix.forEach((node: Node) => {
-          const unclampedIndex = Math.floor(
-            (node.y - computedViewState.min_y) / binWorldHeight
-          );
-          const binIndex = Math.max(
-            0,
-            Math.min(densityBinCount - 1, unclampedIndex)
-          );
-          bins[binIndex].totalCount += 1;
-          if (metadataMatrix.isTruthyValue(node[field.field])) {
-            bins[binIndex].trueCount += 1;
-          }
-        });
-
-        bins.forEach((bin) => {
-          bin.fraction =
-            bin.totalCount > 0 ? bin.trueCount / bin.totalCount : 0;
-        });
-        densityBins.push(...bins);
+      const densityCanvas = createMetadataDensityCanvas({
+        width: Math.max(1, Math.round(metadataMatrix.panelWidth)),
+        height: Math.max(1, Math.round(deckSize?.height ?? 1)),
+        columnWidth: metadataMatrix.columnWidth,
+        matrixFields: metadataMatrix.matrixFields,
+        tipNodes: sortedVisibleTipNodesForMatrix,
+        minY: visibleTipMinY,
+        maxY: visibleTipMinY + visibleTipSpanY,
+        isTruthyValue: metadataMatrix.isTruthyValue,
       });
 
       layers.push({
-        layerType: "PolygonLayer",
+        layerType: "BitmapLayer",
         id: "metadata-matrix-density",
-        data: densityBins,
+        image: densityCanvas,
         pickable: false,
-        stroked: false,
-        filled: true,
-        getPolygon: (d: MetadataMatrixDensityBin) => {
-          const halfWidth = metadataMatrix.columnWidth / 2 - 3;
-          return [
-            [d.x - halfWidth, d.y0],
-            [d.x + halfWidth, d.y0],
-            [d.x + halfWidth, d.y1],
-            [d.x - halfWidth, d.y1],
-          ];
-        },
-        getFillColor: (d: MetadataMatrixDensityBin) =>
-          d.totalCount === 0 ? [248, 248, 248, 180] : blendWithWhite(d.color, d.fraction),
+        bounds: [
+          0,
+          visibleTipMinY,
+          metadataMatrix.panelWidth,
+          visibleTipMinY + visibleTipSpanY,
+        ],
+        desaturate: 0,
+        transparentColor: [0, 0, 0, 0],
         updateTriggers: {
-          getPolygon: [
+          image: [
+            metadataMatrix.panelWidth,
             metadataMatrix.columnWidth,
-            densityBinCount,
-            computedViewState.min_y,
-            computedViewState.max_y,
+            deckSize?.height,
+            visibleTipMinY,
+            visibleTipSpanY,
+            metadataMatrix.matrixFields,
+            visibleTipNodesForMatrix.length,
           ],
-          getFillColor: [metadataMatrix.matrixFields],
         },
       });
     }
@@ -883,6 +979,9 @@ const useLayers = ({
         }
         if (layer.layerType === "SolidPolygonLayer") {
           return new SolidPolygonLayer(layer as any);
+        }
+        if (layer.layerType === "BitmapLayer") {
+          return new BitmapLayer(layer as any);
         }
       console.log("could not map layer spec for ", layer);
     });
