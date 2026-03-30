@@ -76,6 +76,23 @@ const DeckSettingsModal = ({
                 Enable minimap
               </label>
             </div>
+            <div className="mt-2">
+              <label>
+                Minimap position{" "}
+                <select
+                  className="ml-2 border rounded px-2 py-1"
+                  value={settings.minimapPosition}
+                  onChange={(event) =>
+                    settings.setMinimapPosition(
+                      event.target.value as "top-left" | "top-right"
+                    )
+                  }
+                >
+                  <option value="top-left">Top left</option>
+                  <option value="top-right">Top right</option>
+                </select>
+              </label>
+            </div>
             <div>
               <label>
                 <input

@@ -38,7 +38,6 @@ const cache_helper = {
 let processedUploadedData;
 
 const TRUE_VALUES = new Set(["true", "1", "yes", "y", "t"]);
-const METADATA_BACKGROUND_RGBA = [244, 244, 244, 235];
 
 const sendStatusMessage = (status_obj) => {
   postMessage({
@@ -96,17 +95,6 @@ const isTruthyMetadataValue = (value) =>
   TRUE_VALUES.has(normalizeMetadataValue(value));
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-
-const blendWithBackground = (color, fraction, background) => {
-  const clampedFraction = Math.max(0, Math.min(1, fraction));
-  const mix = 1 - clampedFraction;
-  return [
-    Math.round(color[0] * clampedFraction + background[0] * mix),
-    Math.round(color[1] * clampedFraction + background[1] * mix),
-    Math.round(color[2] * clampedFraction + background[2] * mix),
-    Math.round(background[3] + clampedFraction * (255 - background[3])),
-  ];
-};
 
 const createMetadataDensityIndex = (nodes) => {
   const tipNodes = nodes.filter((node) => node.num_tips === 1 || node.is_tip);
@@ -371,12 +359,13 @@ const getMetadataDensity = async ({
       const totalCount = sourceHeight > 0 ? totalCounts[sourceRow] : 0;
       const fillColor =
         totalCount === 0
-          ? METADATA_BACKGROUND_RGBA
-          : blendWithBackground(
-              color,
-              trueCounts[sourceRow] / totalCount,
-              METADATA_BACKGROUND_RGBA
-            );
+          ? [0, 0, 0, 0]
+          : [
+              color[0],
+              color[1],
+              color[2],
+              Math.round((trueCounts[sourceRow] / totalCount) * 255),
+            ];
 
       for (let x = xStart; x < xEnd; x++) {
         const pixelOffset = (rowIndex * width + x) * 4;

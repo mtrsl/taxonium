@@ -109,19 +109,6 @@ const useView = ({
 
   const views = useMemo(() => {
     const vs = [];
-    if (settings.minimapEnabled && !settings.treenomeEnabled) {
-      vs.push(
-        new OrthographicView({
-          id: "minimap",
-          x: "79%",
-          y: "1%",
-          width: "20%",
-          height: "35%",
-          borderWidth: "1px",
-          controller: controllerProps,
-        } as StyledViewProps)
-      );
-    }
     if (settings.treenomeEnabled) {
       vs.push(
         new OrthographicView({
@@ -165,6 +152,19 @@ const useView = ({
           controller: controllerProps,
           width: "100%",
           initialViewState: viewState,
+        } as StyledViewProps)
+      );
+    }
+    if (settings.minimapEnabled && !settings.treenomeEnabled) {
+      vs.push(
+        new OrthographicView({
+          id: "minimap",
+          x: settings.minimapPosition === "top-left" ? "1%" : "79%",
+          y: "1%",
+          width: "20%",
+          height: "35%",
+          borderWidth: "1px",
+          controller: controllerProps,
         } as StyledViewProps)
       );
     }

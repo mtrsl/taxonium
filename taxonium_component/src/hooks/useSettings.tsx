@@ -1,7 +1,11 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { toast } from "react-hot-toast";
 import getDefaultQuery from "../utils/getDefaultQuery";
-import type { Settings, PrettyStroke } from "../types/settings";
+import type {
+  Settings,
+  PrettyStroke,
+  MinimapPosition,
+} from "../types/settings";
 import type { Query } from "../types/query";
 const default_query = getDefaultQuery();
 
@@ -12,6 +16,8 @@ interface UseSettingsProps {
 
 export const useSettings = ({ query, updateQuery }: UseSettingsProps): Settings => {
   const [minimapEnabled, setMinimapEnabled] = useState(true);
+  const [minimapPosition, setMinimapPosition] =
+    useState<MinimapPosition>("top-left");
   const [displayTextForInternalNodes, setDisplayTextForInternalNodes] =
     useState(false);
 
@@ -133,6 +139,8 @@ export const useSettings = ({ query, updateQuery }: UseSettingsProps): Settings 
 
   return {
     minimapEnabled,
+    minimapPosition,
+    setMinimapPosition,
     treenomeEnabled,
     setTreenomeEnabled,
     toggleMinimapEnabled,

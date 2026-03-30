@@ -6,8 +6,12 @@ export interface PrettyStroke {
   width: number;
 }
 
+export type MinimapPosition = "top-left" | "top-right";
+
 export interface Settings {
   minimapEnabled: boolean;
+  minimapPosition: MinimapPosition;
+  setMinimapPosition: (position: MinimapPosition) => void;
   treenomeEnabled: boolean;
   setTreenomeEnabled: (value: boolean) => void;
   toggleMinimapEnabled: () => void;
@@ -43,4 +47,3 @@ export interface Settings {
   opacity: number;
   setOpacity: (value: number) => void;
 }
-

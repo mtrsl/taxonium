@@ -88,6 +88,10 @@ const METADATA_BACKGROUND_RGBA: [number, number, number, number] = [
 const METADATA_BOX_FALSE_RGBA: [number, number, number, number] = [
   255, 255, 255, 235,
 ];
+const METADATA_BOX_FALSE_TRANSPARENT_RGBA: [number, number, number, number] = [
+  255, 255, 255, 0,
+];
+const TRANSPARENT_RGBA: [number, number, number, number] = [0, 0, 0, 0];
 
 const getBoxRectangleTransitionProgress = (pixelsPerTip: number) =>
   clamp((pixelsPerTip - 8) / 8, 0, 1);
@@ -327,12 +331,16 @@ const createMetadataDensityCanvas = ({
         sourceHeight > 0 && totalCounts ? totalCounts[sourceRow] : 0;
       const color =
         totalCount === 0
-          ? METADATA_BACKGROUND_RGBA
-          : blendWithBackground(
-              field.color,
-              ((trueCounts?.[sourceRow] ?? 0) as number) / totalCount,
-              METADATA_BACKGROUND_RGBA
-            );
+          ? TRANSPARENT_RGBA
+          : [
+              field.color[0],
+              field.color[1],
+              field.color[2],
+              Math.round(
+                ((((trueCounts?.[sourceRow] ?? 0) as number) / totalCount) || 0) *
+                  255
+              ),
+            ];
 
       for (let x = xStart; x < xEnd; x++) {
         const pixelOffset = (rowIndex * width + x) * 4;
@@ -1069,6 +1077,28 @@ const useLayers = ({
   );
 
   if (metadataMatrix.isEnabled && visibleTipNodesForMatrix.length > 0) {
+    layers.push({
+      layerType: "PolygonLayer",
+      id: "metadata-matrix-background",
+      data: metadataMatrix.matrixFields.map((field, index) => ({
+        field: field.field,
+        xStart: 12 + index * metadataMatrix.columnWidth + 1,
+        xEnd: 12 + (index + 1) * metadataMatrix.columnWidth - 1,
+      })),
+      pickable: false,
+      stroked: false,
+      filled: true,
+      getPolygon: (d: { xStart: number; xEnd: number }) => [
+        [d.xStart, densityMinY],
+        [d.xEnd, densityMinY],
+        [d.xEnd, densityMinY + densitySpanY],
+        [d.xStart, densityMinY + densitySpanY],
+      ],
+      getFillColor: METADATA_BACKGROUND_RGBA,
+      updateTriggers: {
+        getPolygon: [metadataMatrix.columnWidth, densityMinY, densitySpanY],
+      },
+    });
 
     if (metadataRenderMode === "boxes" || metadataRenderMode === "rectangles") {
       const isLocalRectangleMode =
@@ -1095,7 +1125,7 @@ const useLayers = ({
       const boxHalfWidth = metadataMatrix.cellSize / 2;
       const localFalseFillColor = blendRgbaColors(
         METADATA_BOX_FALSE_RGBA,
-        METADATA_BACKGROUND_RGBA,
+        METADATA_BOX_FALSE_TRANSPARENT_RGBA,
         boxRectangleTransitionProgress
       );
       const halfWidth =
@@ -1108,36 +1138,6 @@ const useLayers = ({
           : isLocalRectangleMode
             ? rectangleHalfWidth
             : Math.max(metadataMatrix.cellSize / 2, metadataMatrix.columnWidth / 2 - 3);
-      if (metadataRenderMode === "boxes" || isLocalRectangleMode) {
-        layers.push({
-          layerType: "PolygonLayer",
-          id: "metadata-matrix-boxes-background",
-          data: metadataMatrix.matrixFields.map((field, index) => ({
-            field: field.field,
-            x:
-              12 +
-              index * metadataMatrix.columnWidth +
-              metadataMatrix.columnWidth / 2,
-          })),
-          pickable: false,
-          stroked: false,
-          filled: true,
-          getPolygon: (d: { x: number }) => [
-            [d.x - (metadataMatrix.columnWidth / 2 - 1), densityMinY],
-            [d.x + (metadataMatrix.columnWidth / 2 - 1), densityMinY],
-            [d.x + (metadataMatrix.columnWidth / 2 - 1), densityMinY + densitySpanY],
-            [d.x - (metadataMatrix.columnWidth / 2 - 1), densityMinY + densitySpanY],
-          ],
-          getFillColor: METADATA_BACKGROUND_RGBA,
-          updateTriggers: {
-            getPolygon: [
-              metadataMatrix.columnWidth,
-              densityMinY,
-              densitySpanY,
-            ],
-          },
-        });
-      }
       layers.push({
         layerType: "PolygonLayer",
         id: `metadata-matrix-${metadataRenderMode}`,
@@ -1167,7 +1167,7 @@ const useLayers = ({
               ? localFalseFillColor
               : metadataRenderMode === "boxes"
                 ? METADATA_BOX_FALSE_RGBA
-              : METADATA_BACKGROUND_RGBA,
+              : TRANSPARENT_RGBA,
         getLineColor: (d: MetadataMatrixCell) =>
           isLocalBoxRectangleMode
             ? blendRgbTowardBackground(
@@ -1215,7 +1215,7 @@ const useLayers = ({
           [d.x - halfWidth, d.y + halfHeight],
         ],
         getFillColor: (d: MetadataMatrixCell) =>
-          d.isTrue ? [...d.color, 245] : METADATA_BACKGROUND_RGBA,
+          d.isTrue ? [...d.color, 245] : TRANSPARENT_RGBA,
         updateTriggers: {
           getPolygon: [
             metadataMatrix.columnWidth,
