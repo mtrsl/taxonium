@@ -237,7 +237,7 @@ function Deck({
     [hoverDetails]
   );
 
-  const { layers, layerFilter, keyStuff, triggerSVGdownload, metadataDebugInfo } = useLayers({
+  const { layers, layerFilter, keyStuff, triggerSVGdownload } = useLayers({
     backend,
     data,
     search,
@@ -386,36 +386,6 @@ function Deck({
         requestOpenSettings={() => setDeckSettingsOpen(true)}
         settings={settings}
       />
-      {metadataDebugInfo && (
-        <div
-          style={{
-            position: "absolute",
-            top: metadataMatrix.isEnabled
-              ? `${Math.max(metadataMatrix.headerHeight - 8, 8)}px`
-              : "8px",
-            right: "8px",
-            zIndex: 3,
-            pointerEvents: "none",
-            background: "rgba(255, 255, 255, 0.92)",
-            border: "1px solid rgba(209, 213, 219, 0.95)",
-            borderRadius: "6px",
-            padding: "6px 8px",
-            fontSize: "11px",
-            lineHeight: 1.3,
-            color: "#374151",
-            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)",
-          }}
-        >
-          <div style={{ fontWeight: 700 }}>Debug</div>
-          <div>
-            pixelsPerTip:{" "}
-            {Number.isFinite(metadataDebugInfo.pixelsPerTip)
-              ? metadataDebugInfo.pixelsPerTip.toFixed(2)
-              : "inf"}
-          </div>
-          <div>mode: {metadataDebugInfo.renderMode}</div>
-        </div>
-      )}
       <DeckGL
         pickingRadius={10}
         //getCursor={() => hoverInfo && hoverInfo.object ? "default" : "pointer"}

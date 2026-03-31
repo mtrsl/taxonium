@@ -899,13 +899,6 @@ const useLayers = ({
   const pixelsPerTip =
     backend.type === "local" ? localPixelsPerTip : sampledPixelsPerTip;
 
-  const metadataDebugInfo = metadataMatrix.isEnabled
-    ? {
-        pixelsPerTip,
-        renderMode: metadataRenderMode,
-      }
-    : null;
-
   const metadataDensityRequest = useMemo(() => {
     if (
       !metadataMatrix.isEnabled ||
@@ -1502,7 +1495,6 @@ const useLayers = ({
     layerFilter,
     keyStuff,
     triggerSVGdownload,
-    metadataDebugInfo,
   };
 };
 
