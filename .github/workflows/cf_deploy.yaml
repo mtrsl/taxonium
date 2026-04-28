@@ -1,0 +1,35 @@
+name: Deploy to Cloudflare Pages
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 25
+
+      - name: Install and build
+        env:
+          NODE_OPTIONS: "--max_old_space_size=8192"
+        run: |
+          cd taxonium_component 
+          npm ci
+          npm run build 
+          cd .. 
+          cd taxonium_website
+          npm ci
+          npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy taxonium_website/dist --project-name=taxonium_mjr
