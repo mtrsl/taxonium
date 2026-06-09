@@ -19,6 +19,7 @@ import type { View } from "../hooks/useView";
 import { FaSearch, FaShare } from "react-icons/fa";
 
 import { Select } from "./Basic";
+import ColorSwatchPicker from "./ColorSwatchPicker";
 import ListOutputModal from "./ListOutputModal";
 
 import { useState, useMemo, useEffect, ChangeEvent } from "react";
@@ -465,29 +466,29 @@ function SearchPanel({
           ) : (
             <>
               <div className="max-h-32 overflow-y-auto space-y-1 border border-gray-200 rounded-sm p-2">
-                {metadataMatrix.availableFields.map((field) => (
-                  <label
-                    key={field}
-                    className="flex items-center justify-between gap-2 text-xs text-gray-700"
-                  >
-                    <span className="flex items-center gap-2 min-w-0">
-                      <input
-                        type="checkbox"
-                        checked={metadataMatrix.selectedFields.includes(field)}
-                        onChange={() => metadataMatrix.toggleField(field)}
+                {metadataMatrix.availableFields.map((field) => {
+                  const label = prettifyName(field, config);
+                  return (
+                    <div
+                      key={field}
+                      className="flex items-center justify-between gap-2 text-xs text-gray-700"
+                    >
+                      <label className="flex items-center gap-2 min-w-0 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={metadataMatrix.selectedFields.includes(field)}
+                          onChange={() => metadataMatrix.toggleField(field)}
+                        />
+                        <span className="truncate">{label}</span>
+                      </label>
+                      <ColorSwatchPicker
+                        color={metadataMatrix.getFieldColor(field)}
+                        setColor={(color) => metadataMatrix.setFieldColor(field, color)}
+                        title={`Edit colour for ${label}`}
                       />
-                      <span className="truncate">{prettifyName(field, config)}</span>
-                    </span>
-                    <span
-                      className="inline-block w-3 h-3 rounded-sm border border-gray-300 shrink-0"
-                      style={{
-                        backgroundColor: `rgb(${metadataMatrix.matrixFields.find(
-                          (item) => item.field === field
-                        )?.color.join(",") ?? "255,255,255"})`,
-                      }}
-                    />
-                  </label>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
               {metadataMatrix.selectedFields.length > 0 && (
                 <div className="space-y-1">

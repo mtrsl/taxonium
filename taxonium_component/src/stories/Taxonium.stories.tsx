@@ -136,6 +136,9 @@ export const LocalDataWithMetadataMatrix = {
     query: {
       metadataMatrix: JSON.stringify({
         fields: ["meta_Vaccinated", "meta_HostJump", "meta_Sampled"],
+        colors: {
+          meta_Vaccinated: [12, 34, 56],
+        },
       }),
     },
     updateQuery: () => {},

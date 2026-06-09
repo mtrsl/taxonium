@@ -2,7 +2,11 @@ import { useMemo, useCallback } from "react";
 import prettifyName from "../utils/prettifyName";
 import type { Query } from "../types/query";
 import type { Config, DynamicData } from "../types/backend";
-import type { MetadataMatrix, MetadataMatrixConfig } from "../types/metadataMatrix";
+import type {
+  MetadataMatrix,
+  MetadataMatrixColor,
+  MetadataMatrixConfig,
+} from "../types/metadataMatrix";
 
 const TRUE_VALUES = new Set(["true", "1", "yes", "y", "t"]);
 const FALSE_VALUES = new Set(["false", "0", "no", "n", "f", ""]);
@@ -28,7 +32,11 @@ const clampColorChannel = (channel: number) => {
   return Math.max(55, Math.min(215, channel));
 };
 
-const fieldToColor = (field: string): [number, number, number] => {
+const clampCustomColorChannel = (channel: number) => {
+  return Math.max(0, Math.min(255, Math.round(channel)));
+};
+
+const fieldToColor = (field: string): MetadataMatrixColor => {
   let hash = 0;
   for (let i = 0; i < field.length; i++) {
     hash = field.charCodeAt(i) + ((hash << 5) - hash);
@@ -41,6 +49,53 @@ const fieldToColor = (field: string): [number, number, number] => {
   ];
 };
 
+const isMetadataMatrixColor = (value: unknown): value is MetadataMatrixColor => {
+  return (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((channel) => typeof channel === "number" && Number.isFinite(channel))
+  );
+};
+
+const sanitizeColors = (
+  colors: Partial<MetadataMatrixConfig>["colors"]
+): Record<string, MetadataMatrixColor> => {
+  if (!colors || typeof colors !== "object" || Array.isArray(colors)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(colors)
+      .filter((entry): entry is [string, MetadataMatrixColor] =>
+        isMetadataMatrixColor(entry[1])
+      )
+      .map(([field, color]) => [
+        field,
+        [
+          clampCustomColorChannel(color[0]),
+          clampCustomColorChannel(color[1]),
+          clampCustomColorChannel(color[2]),
+        ] satisfies MetadataMatrixColor,
+      ])
+  );
+};
+
+const uniqueFields = (fields: string[]) =>
+  fields.filter((field, index) => fields.indexOf(field) === index);
+
+const serializeConfig = (
+  fields: string[],
+  colors: Record<string, MetadataMatrixColor>
+) => {
+  const nextConfig: MetadataMatrixConfig = {
+    fields: uniqueFields(fields),
+  };
+  if (Object.keys(colors).length > 0) {
+    nextConfig.colors = colors;
+  }
+  return JSON.stringify(nextConfig);
+};
+
 const sanitizeConfig = (rawConfig: string | undefined): MetadataMatrixConfig => {
   if (!rawConfig) {
     return { fields: [] };
@@ -49,8 +104,13 @@ const sanitizeConfig = (rawConfig: string | undefined): MetadataMatrixConfig => 
     const parsed = JSON.parse(rawConfig) as Partial<MetadataMatrixConfig>;
     return {
       fields: Array.isArray(parsed.fields)
-        ? parsed.fields.filter((field): field is string => typeof field === "string")
+        ? uniqueFields(
+            parsed.fields.filter(
+              (field): field is string => typeof field === "string"
+            )
+          )
         : [],
+      colors: sanitizeColors(parsed.colors),
     };
   } catch {
     return { fields: [] };
@@ -126,12 +186,37 @@ const useMetadataMatrix = ({
   const setSelectedFields = useCallback(
     (fields: string[]) => {
       updateQuery({
-        metadataMatrix: JSON.stringify({
-          fields: fields.filter((field, index) => fields.indexOf(field) === index),
+        metadataMatrix: serializeConfig(
+          fields,
+          metadataMatrixConfig.colors ?? {}
+        ),
+      });
+    },
+    [metadataMatrixConfig.colors, updateQuery]
+  );
+
+  const getFieldColor = useCallback(
+    (field: string): MetadataMatrixColor => {
+      return metadataMatrixConfig.colors?.[field] ?? fieldToColor(field);
+    },
+    [metadataMatrixConfig.colors]
+  );
+
+  const setFieldColor = useCallback(
+    (field: string, color: MetadataMatrixColor) => {
+      const sanitizedColor: MetadataMatrixColor = [
+        clampCustomColorChannel(color[0]),
+        clampCustomColorChannel(color[1]),
+        clampCustomColorChannel(color[2]),
+      ];
+      updateQuery({
+        metadataMatrix: serializeConfig(metadataMatrixConfig.fields, {
+          ...(metadataMatrixConfig.colors ?? {}),
+          [field]: sanitizedColor,
         }),
       });
     },
-    [updateQuery]
+    [metadataMatrixConfig.colors, metadataMatrixConfig.fields, updateQuery]
   );
 
   const toggleField = useCallback(
@@ -167,9 +252,9 @@ const useMetadataMatrix = ({
     return selectedFields.map((field) => ({
       field,
       label: prettifyName(field, config),
-      color: fieldToColor(field),
+      color: getFieldColor(field),
     }));
-  }, [config, selectedFields]);
+  }, [config, getFieldColor, selectedFields]);
 
   const columnWidth = 24;
   const cellSize = 14;
@@ -191,6 +276,8 @@ const useMetadataMatrix = ({
       setSelectedFields,
       toggleField,
       moveField,
+      getFieldColor,
+      setFieldColor,
       isTruthyValue,
     }),
     [
@@ -204,6 +291,8 @@ const useMetadataMatrix = ({
       setSelectedFields,
       toggleField,
       moveField,
+      getFieldColor,
+      setFieldColor,
     ]
   );
 };

@@ -1,13 +1,16 @@
 import type { Node } from "./node";
 
+export type MetadataMatrixColor = [number, number, number];
+
 export interface MetadataMatrixConfig {
   fields: string[];
+  colors?: Record<string, MetadataMatrixColor>;
 }
 
 export interface MetadataMatrixField {
   field: string;
   label: string;
-  color: [number, number, number];
+  color: MetadataMatrixColor;
 }
 
 export interface MetadataMatrixCell {
@@ -16,7 +19,7 @@ export interface MetadataMatrixCell {
   x: number;
   y: number;
   isTrue: boolean;
-  color: [number, number, number];
+  color: MetadataMatrixColor;
 }
 
 export type MetadataMatrixRenderMode =
@@ -33,14 +36,14 @@ export interface MetadataMatrixDensityBin {
   trueCount: number;
   totalCount: number;
   fraction: number;
-  color: [number, number, number];
+  color: MetadataMatrixColor;
 }
 
 export interface MetadataMatrixHeader {
   field: string;
   label: string;
   x: number;
-  color: [number, number, number];
+  color: MetadataMatrixColor;
 }
 
 export interface MetadataMatrix {
@@ -55,5 +58,7 @@ export interface MetadataMatrix {
   setSelectedFields: (fields: string[]) => void;
   toggleField: (field: string) => void;
   moveField: (field: string, direction: -1 | 1) => void;
+  getFieldColor: (field: string) => MetadataMatrixColor;
+  setFieldColor: (field: string, color: MetadataMatrixColor) => void;
   isTruthyValue: (value: unknown) => boolean;
 }
