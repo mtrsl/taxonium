@@ -257,8 +257,8 @@ const useMetadataMatrix = ({
       label: prettifyName(field, config),
       color: getFieldColor(field),
       kind: fieldInfo[field]?.kind ?? "boolean",
-      min: fieldInfo[field]?.min,
-      max: fieldInfo[field]?.max,
+      min: 0,
+      max: 1,
     }));
   }, [config, fieldInfo, getFieldColor, selectedFields]);
 
@@ -267,10 +267,7 @@ const useMetadataMatrix = ({
       if (field.kind === "boolean") {
         return isTruthyValue(value) ? field.color : null;
       }
-      const normalizedValue = normalizeNumericValue(value, field.min, field.max);
-      if (normalizedValue === null) {
-        return null;
-      }
+      const normalizedValue = normalizeNumericValue(value);
       return interpolateMetadataColor([244, 244, 244], field.color, normalizedValue);
     },
     [matrixFields]

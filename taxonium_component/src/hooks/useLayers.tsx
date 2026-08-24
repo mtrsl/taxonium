@@ -35,7 +35,6 @@ import type {
 } from "../types/metadataMatrix";
 import {
   normalizeNumericValue,
-  parseNumericMetadataValue,
 } from "../utils/metadataMatrix";
 
 const blendWithBackground = (
@@ -330,10 +329,9 @@ const createMetadataDensityCanvas = ({
 
         for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
           if (field.kind === "numeric") {
-            const value = parseNumericMetadataValue(node[field.field]);
-            if (value !== null && valueSums && valueCounts) {
+            if (valueSums && valueCounts) {
               totalCounts[rowIndex] += 1;
-              valueSums[rowIndex] += value;
+              valueSums[rowIndex] += normalizeNumericValue(node[field.field]);
               valueCounts[rowIndex] += 1;
             }
           } else {
@@ -368,9 +366,8 @@ const createMetadataDensityCanvas = ({
       if (totalCount > 0) {
         if (field.kind === "numeric" && valueSums && valueCounts) {
           const mean = valueSums[sourceRow] / valueCounts[sourceRow];
-          const normalized = normalizeNumericValue(mean, field.min, field.max);
-          const valueColor = normalized === null ? null : getValueColor(field, mean);
-          color = valueColor ? [...valueColor, 255] : TRANSPARENT_RGBA;
+          const valueColor = getValueColor(field, mean) ?? field.color;
+          color = [...valueColor, 255];
         } else {
           color = [
             field.color[0],
@@ -966,8 +963,6 @@ const useLayers = ({
         field: field.field,
         kind: field.kind,
         color: field.color,
-        min: field.min,
-        max: field.max,
       })),
     } satisfies MetadataDensityRequest;
   }, [
@@ -1052,7 +1047,7 @@ const useLayers = ({
                   : undefined,
               value:
                 field.kind === "numeric"
-                  ? parseNumericMetadataValue(node[field.field]) ?? undefined
+                  ? normalizeNumericValue(node[field.field])
                   : undefined,
               color:
                 field.kind === "numeric"
@@ -1214,9 +1209,7 @@ const useLayers = ({
         ],
         getFillColor: (d: MetadataMatrixCell) =>
           d.kind === "numeric"
-            ? d.value === undefined
-              ? TRANSPARENT_RGBA
-              : [...d.color, 255]
+            ? [...d.color, 255]
             : d.isTrue
               ? [...d.color, 255]
               : isLocalBoxRectangleMode
@@ -1272,9 +1265,7 @@ const useLayers = ({
         ],
         getFillColor: (d: MetadataMatrixCell) =>
           d.kind === "numeric"
-            ? d.value === undefined
-              ? TRANSPARENT_RGBA
-              : [...d.color, 245]
+            ? [...d.color, 245]
             : d.isTrue
               ? [...d.color, 245]
               : TRANSPARENT_RGBA,

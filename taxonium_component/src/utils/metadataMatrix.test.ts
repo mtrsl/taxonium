@@ -20,16 +20,12 @@ describe("metadata matrix field classification", () => {
   it("classifies finite numeric strings and records their range", () => {
     expect(classifyMetadataValues(["-2", 4, " 8.5 ", ""])).toEqual({
       kind: "numeric",
-      min: -2,
-      max: 8.5,
     });
   });
 
   it("treats invalid values in an otherwise numeric field as missing", () => {
     expect(classifyMetadataValues(["2", "unknown", ""])).toEqual({
       kind: "numeric",
-      min: 2,
-      max: 2,
     });
     expect(classifyMetadataValues(["unknown", ""])).toBeNull();
     expect(parseNumericMetadataValue("not a number")).toBeNull();
@@ -37,30 +33,32 @@ describe("metadata matrix field classification", () => {
 });
 
 describe("numeric metadata density", () => {
-  it("excludes missing values from the bin mean", () => {
+  it("includes zero-filled missing values in the bin mean", () => {
     const prefix = buildNumericPrefixValues([1, "", "invalid", "5", 9]);
 
     expect(summarizeNumericPrefixValues(prefix, 0, 3)).toEqual({
       sum: 1,
-      count: 1,
-      mean: 1,
+      count: 3,
+      mean: 1 / 3,
     });
     expect(summarizeNumericPrefixValues(prefix, 3, 5)).toEqual({
-      sum: 14,
+      sum: 2,
       count: 2,
-      mean: 7,
+      mean: 1,
     });
     expect(summarizeNumericPrefixValues(prefix, 1, 3)).toEqual({
       sum: 0,
-      count: 0,
-      mean: null,
+      count: 2,
+      mean: 0,
     });
   });
 
-  it("normalizes stable dataset-wide ranges", () => {
-    expect(normalizeNumericValue(0, -10, 10)).toBe(0.5);
-    expect(normalizeNumericValue(100, 10, 10)).toBe(1);
-    expect(normalizeNumericValue("missing", 0, 10)).toBeNull();
+  it("normalizes every numeric field to the fixed [0, 1] scale", () => {
+    expect(normalizeNumericValue(0)).toBe(0);
+    expect(normalizeNumericValue(0.5)).toBe(0.5);
+    expect(normalizeNumericValue(100)).toBe(1);
+    expect(normalizeNumericValue(-10)).toBe(0);
+    expect(normalizeNumericValue("missing")).toBe(0);
   });
 
   it("interpolates from the neutral colour to the field colour", () => {

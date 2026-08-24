@@ -103,11 +103,209 @@ waitForTheImports = async () => {
 
 var processedData = null;
 var cached_starting_values = null;
+var metadataDensityIndex = null;
+
+const TRUE_VALUES = new Set(["true", "1", "yes", "y", "t"]);
+const FALSE_VALUES = new Set(["false", "0", "no", "n", "f", ""]);
+
+const normalizeMetadataValue = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return String(value).trim().toLowerCase();
+};
+
+const isBooleanLikeValue = (value) => {
+  const normalized = normalizeMetadataValue(value);
+  return TRUE_VALUES.has(normalized) || FALSE_VALUES.has(normalized);
+};
+
+const parseNumericMetadataValue = (value) => {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
+  const parsed = typeof value === "number" ? value : Number(String(value).trim());
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const classifyMetadataValues = (values) => {
+  let sawValue = false;
+  let sawNumeric = false;
+  let allBoolean = true;
+
+  for (const value of values) {
+    if (normalizeMetadataValue(value) === "") {
+      continue;
+    }
+    sawValue = true;
+    if (!isBooleanLikeValue(value)) {
+      allBoolean = false;
+    }
+    if (parseNumericMetadataValue(value) !== null) {
+      sawNumeric = true;
+    }
+  }
+
+  if (!sawValue || (!allBoolean && !sawNumeric)) {
+    return null;
+  }
+  return { kind: allBoolean ? "boolean" : "numeric" };
+};
+
+const clampNumericMetadataValue = (value) => {
+  const numeric = parseNumericMetadataValue(value) ?? 0;
+  return Math.max(0, Math.min(1, numeric));
+};
+
+const findFirstIndexAtOrAbove = (values, target) => {
+  let low = 0;
+  let high = values.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (values[mid] < target) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+};
+
+const createMetadataDensityIndex = (nodes) => {
+  const tipNodes = nodes
+    .filter((node) => node.num_tips === 1 || node.is_tip)
+    .sort((a, b) => a.y - b.y);
+  const fieldNames = new Set();
+  tipNodes.forEach((node) => {
+    Object.keys(node).forEach((field) => {
+      if (field.startsWith("meta_")) {
+        fieldNames.add(field);
+      }
+    });
+  });
+
+  const fieldInfo = {};
+  fieldNames.forEach((field) => {
+    const info = classifyMetadataValues(tipNodes.map((node) => node[field]));
+    if (info) {
+      fieldInfo[field] = info;
+    }
+  });
+
+  return {
+    tipNodes,
+    tipYPositions: tipNodes.map((node) => node.y),
+    fieldInfo,
+    fieldPrefixTrueCounts: {},
+    fieldPrefixNumericValues: {},
+  };
+};
+
+const ensureMetadataDensityIndex = () => {
+  if (!metadataDensityIndex) {
+    metadataDensityIndex = createMetadataDensityIndex(processedData.nodes);
+  }
+  return metadataDensityIndex;
+};
+
+const ensureFieldTruePrefixCounts = (index, field) => {
+  if (!index.fieldPrefixTrueCounts[field]) {
+    const prefixCounts = new Array(index.tipNodes.length + 1).fill(0);
+    index.tipNodes.forEach((node, nodeIndex) => {
+      prefixCounts[nodeIndex + 1] =
+        prefixCounts[nodeIndex] +
+        (isBooleanLikeValue(node[field]) && TRUE_VALUES.has(normalizeMetadataValue(node[field]))
+          ? 1
+          : 0);
+    });
+    index.fieldPrefixTrueCounts[field] = prefixCounts;
+  }
+  return index.fieldPrefixTrueCounts[field];
+};
+
+const ensureFieldNumericPrefixValues = (index, field) => {
+  if (!index.fieldPrefixNumericValues[field]) {
+    const sums = new Array(index.tipNodes.length + 1).fill(0);
+    const counts = new Array(index.tipNodes.length + 1).fill(0);
+    index.tipNodes.forEach((node, nodeIndex) => {
+      sums[nodeIndex + 1] =
+        sums[nodeIndex] + clampNumericMetadataValue(node[field]);
+      counts[nodeIndex + 1] = counts[nodeIndex] + 1;
+    });
+    index.fieldPrefixNumericValues[field] = { sums, counts };
+  }
+  return index.fieldPrefixNumericValues[field];
+};
+
+const getMetadataDensity = (request) => {
+  const index = ensureMetadataDensityIndex();
+  const minY = Number(request.minY);
+  const maxY = Number(request.maxY);
+  const height = Math.max(1, Math.floor(Number(request.height)));
+  const fields = Array.isArray(request.fields) ? request.fields : [];
+  const result = { fields: {}, minY, maxY, height };
+
+  if (!Number.isFinite(minY) || !Number.isFinite(maxY) || maxY <= minY) {
+    return result;
+  }
+
+  const rowLowerBounds = new Array(height);
+  const rowUpperBounds = new Array(height);
+  for (let rowIndex = 0; rowIndex < height; rowIndex++) {
+    const rowUpperY = maxY - (rowIndex * (maxY - minY)) / height;
+    const rowLowerY = maxY - ((rowIndex + 1) * (maxY - minY)) / height;
+    rowLowerBounds[rowIndex] = Math.max(
+      0,
+      Math.min(index.tipYPositions.length, findFirstIndexAtOrAbove(index.tipYPositions, rowLowerY))
+    );
+    rowUpperBounds[rowIndex] = Math.max(
+      rowLowerBounds[rowIndex],
+      Math.min(index.tipYPositions.length, findFirstIndexAtOrAbove(index.tipYPositions, rowUpperY))
+    );
+  }
+
+  fields.forEach(({ field, kind: requestedKind }) => {
+    const kind = requestedKind || index.fieldInfo[field]?.kind || "boolean";
+    const totalCounts = new Array(height).fill(0);
+    const trueCounts = kind === "boolean" ? new Array(height).fill(0) : undefined;
+    const valueSums = kind === "numeric" ? new Array(height).fill(0) : undefined;
+    const valueCounts = kind === "numeric" ? new Array(height).fill(0) : undefined;
+    const prefixTrueCounts = kind === "boolean"
+      ? ensureFieldTruePrefixCounts(index, field)
+      : null;
+    const prefixNumericValues = kind === "numeric"
+      ? ensureFieldNumericPrefixValues(index, field)
+      : null;
+
+    for (let rowIndex = 0; rowIndex < height; rowIndex++) {
+      const start = rowLowerBounds[rowIndex];
+      const end = rowUpperBounds[rowIndex];
+      totalCounts[rowIndex] = end - start;
+      if (kind === "numeric" && prefixNumericValues) {
+        valueSums[rowIndex] = prefixNumericValues.sums[end] - prefixNumericValues.sums[start];
+        valueCounts[rowIndex] = prefixNumericValues.counts[end] - prefixNumericValues.counts[start];
+      } else if (prefixTrueCounts && trueCounts) {
+        trueCounts[rowIndex] = prefixTrueCounts[end] - prefixTrueCounts[start];
+      }
+    }
+
+    result.fields[field] = {
+      kind,
+      totalCounts,
+      ...(kind === "numeric"
+        ? { valueSums, valueCounts }
+        : { trueCounts }),
+    };
+  });
+
+  return result;
+};
 
 let options;
 
 app.use(cors());
 app.use(compression());
+app.use(express.json({ limit: "50mb" }));
 
 app.use(queue({ activeLimit: 500000, queuedLimit: 500000 }));
 
@@ -224,13 +422,26 @@ app.get("/config", function (req, res) {
     (processedData.overallMinY + processedData.overallMaxY) / 2;
   config.initial_zoom = -2;
   config.genes = processedData.genes;
-  config = { ...config, ...processedData.overwrite_config };
+  config = {
+    ...config,
+    metadataFields: ensureMetadataDensityIndex().fieldInfo,
+    ...processedData.overwrite_config,
+  };
   config.rootMutations = config.useHydratedMutations
     ? []
     : processedData.rootMutations;
   config.rootId = processedData.rootId;
 
   res.send(config);
+});
+
+app.post("/metadata_density/", function (req, res) {
+  try {
+    res.json(getMetadataDensity(req.body || {}));
+  } catch (error) {
+    console.error("Failed to calculate metadata density:", error);
+    res.status(400).json({ error: "Invalid metadata density request" });
+  }
 });
 
 app.get("/mutations/", function (req, res) {
@@ -460,6 +671,7 @@ const loadData = async () => {
     streamValues,
     Buffer
   );
+  metadataDensityIndex = createMetadataDensityIndex(processedData.nodes);
 
   logStatusMessage({
     status: "finalising",

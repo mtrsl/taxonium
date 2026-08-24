@@ -97,9 +97,9 @@ export const ConfigTree = {
 
 const nwk = `((A:0.1,B:0.2):0.3,(C:0.4,D:0.5):0.6);`;
 const metadata_text = `Node,Name,Species,Vaccinated,HostJump,Sampled,Temperature
-A,Bob,Cow,true,false,yes,12.5
-B,Jim,Cow,false,false,no,15
-C,Joe,Fish,true,true,yes,18.5
+A,Bob,Cow,true,false,yes,0.25
+B,Jim,Cow,false,false,no,0.5
+C,Joe,Fish,true,true,yes,0.85
 D,John,Fish,false,true,no,`;
 
 const metadata = {

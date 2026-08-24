@@ -488,8 +488,7 @@ function SearchPanel({
                       </label>
                       {metadataMatrix.fieldInfo[field]?.kind === "numeric" && (
                         <span className="text-[10px] text-gray-400 shrink-0">
-                          {metadataMatrix.fieldInfo[field]?.min}–
-                          {metadataMatrix.fieldInfo[field]?.max}
+                          0–1
                         </span>
                       )}
                       <ColorSwatchPicker

@@ -387,8 +387,6 @@ const getMetadataDensity = async ({
       totalCounts,
       valueSums,
       valueCounts,
-      min: fieldInfo?.min,
-      max: fieldInfo?.max,
     };
   });
 
@@ -429,12 +427,7 @@ const getMetadataDensity = async ({
         fillColor = [0, 0, 0, 0];
       } else if (kind === "numeric" && valueSums && valueCounts) {
         const mean = valueSums[sourceRow] / valueCounts[sourceRow];
-        const fraction = normalizeNumericValue(
-          mean,
-          fieldConfig.min ?? fieldInfo?.min,
-          fieldConfig.max ?? fieldInfo?.max
-        );
-        const clampedFraction = fraction ?? 0;
+        const clampedFraction = normalizeNumericValue(mean);
         fillColor = [...interpolateMetadataColor(
           [244, 244, 244],
           color,

@@ -2,8 +2,6 @@ export type MetadataFieldKind = "boolean" | "numeric";
 
 export interface MetadataFieldInfo {
   kind: MetadataFieldKind;
-  min?: number;
-  max?: number;
 }
 
 export type MetadataMatrixColor = [number, number, number];
@@ -37,8 +35,6 @@ export const classifyMetadataValues = (
   let sawValue = false;
   let sawNumeric = false;
   let allBoolean = true;
-  let min = Number.POSITIVE_INFINITY;
-  let max = Number.NEGATIVE_INFINITY;
 
   for (const value of values) {
     if (normalizeMetadataValue(value) === "") {
@@ -51,8 +47,6 @@ export const classifyMetadataValues = (
     const numeric = parseNumericMetadataValue(value);
     if (numeric !== null) {
       sawNumeric = true;
-      min = Math.min(min, numeric);
-      max = Math.max(max, numeric);
     }
   }
 
@@ -62,22 +56,14 @@ export const classifyMetadataValues = (
   if (allBoolean) {
     return { kind: "boolean" };
   }
-  return { kind: "numeric", min, max };
+  return { kind: "numeric" };
 };
 
 export const normalizeNumericValue = (
-  value: unknown,
-  min: number | undefined,
-  max: number | undefined
-): number | null => {
+  value: unknown
+): number => {
   const numeric = parseNumericMetadataValue(value);
-  if (numeric === null || min === undefined || max === undefined) {
-    return null;
-  }
-  if (max <= min) {
-    return 1;
-  }
-  return Math.max(0, Math.min(1, (numeric - min) / (max - min)));
+  return Math.max(0, Math.min(1, numeric ?? 0));
 };
 
 export const interpolateMetadataColor = (
