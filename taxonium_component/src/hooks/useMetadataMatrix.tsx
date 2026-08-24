@@ -7,25 +7,19 @@ import type {
   MetadataMatrixColor,
   MetadataMatrixConfig,
 } from "../types/metadataMatrix";
+import {
+  classifyMetadataValues,
+  interpolateMetadataColor,
+  normalizeMetadataValue,
+  normalizeNumericValue,
+  TRUE_VALUES,
+  type MetadataFieldInfo,
+} from "../utils/metadataMatrix";
 
-const TRUE_VALUES = new Set(["true", "1", "yes", "y", "t"]);
-const FALSE_VALUES = new Set(["false", "0", "no", "n", "f", ""]);
 const RESERVED_FIELDS = new Set(["genotype", "None"]);
 
-const normalizeValue = (value: unknown): string => {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  return String(value).trim().toLowerCase();
-};
-
-const isBooleanLikeValue = (value: unknown) => {
-  const normalized = normalizeValue(value);
-  return TRUE_VALUES.has(normalized) || FALSE_VALUES.has(normalized);
-};
-
 const isTruthyValue = (value: unknown) => {
-  return TRUE_VALUES.has(normalizeValue(value));
+  return TRUE_VALUES.has(normalizeMetadataValue(value));
 };
 
 const clampColorChannel = (channel: number) => {
@@ -160,22 +154,31 @@ const useMetadataMatrix = ({
 
     return Array.from(fieldCandidates)
       .filter((field) => {
-        let sawBooleanLikeValue = false;
-        for (const node of sampleNodes) {
-          const value = node[field];
-          const normalized = normalizeValue(value);
-          if (normalized === "") {
-            continue;
-          }
-          if (!isBooleanLikeValue(value)) {
-            return false;
-          }
-          sawBooleanLikeValue = true;
+        if (config.metadataFields?.[field]) {
+          return true;
         }
-        return sawBooleanLikeValue;
+        return classifyMetadataValues(sampleNodes.map((node) => node[field])) !== null;
       })
       .sort((a, b) => prettifyName(a, config).localeCompare(prettifyName(b, config)));
   }, [config, nodes]);
+
+  const fieldInfo = useMemo(() => {
+    const info: Record<string, MetadataFieldInfo> = {};
+    availableFields.forEach((field) => {
+      const configuredInfo = config.metadataFields?.[field];
+      if (configuredInfo) {
+        info[field] = configuredInfo;
+        return;
+      }
+      const inferredInfo = classifyMetadataValues(
+        nodes.slice(0, 2000).map((node) => node[field])
+      );
+      if (inferredInfo) {
+        info[field] = inferredInfo;
+      }
+    });
+    return info;
+  }, [availableFields, config.metadataFields, nodes]);
 
   const selectedFields = useMemo(() => {
     return metadataMatrixConfig.fields.filter((field) =>
@@ -253,8 +256,25 @@ const useMetadataMatrix = ({
       field,
       label: prettifyName(field, config),
       color: getFieldColor(field),
+      kind: fieldInfo[field]?.kind ?? "boolean",
+      min: fieldInfo[field]?.min,
+      max: fieldInfo[field]?.max,
     }));
-  }, [config, getFieldColor, selectedFields]);
+  }, [config, fieldInfo, getFieldColor, selectedFields]);
+
+  const getValueColor = useCallback(
+    (field: MetadataMatrix["matrixFields"][number], value: unknown) => {
+      if (field.kind === "boolean") {
+        return isTruthyValue(value) ? field.color : null;
+      }
+      const normalizedValue = normalizeNumericValue(value, field.min, field.max);
+      if (normalizedValue === null) {
+        return null;
+      }
+      return interpolateMetadataColor([244, 244, 244], field.color, normalizedValue);
+    },
+    [matrixFields]
+  );
 
   const columnWidth = 24;
   const cellSize = 14;
@@ -267,6 +287,7 @@ const useMetadataMatrix = ({
     () => ({
       selectedFields,
       availableFields,
+      fieldInfo,
       matrixFields,
       isEnabled: matrixFields.length > 0,
       panelWidth,
@@ -279,10 +300,12 @@ const useMetadataMatrix = ({
       getFieldColor,
       setFieldColor,
       isTruthyValue,
+      getValueColor,
     }),
     [
       selectedFields,
       availableFields,
+      fieldInfo,
       matrixFields,
       panelWidth,
       headerHeight,
@@ -293,6 +316,7 @@ const useMetadataMatrix = ({
       moveField,
       getFieldColor,
       setFieldColor,
+      getValueColor,
     ]
   );
 };

@@ -8,6 +8,8 @@ import type {
   NodeDetails,
   SearchResult,
   ServerBackend,
+  MetadataDensityRequest,
+  MetadataDensityResponse,
 } from "../types/backend";
 
 function useServerBackend(
@@ -248,6 +250,25 @@ function useServerBackend(
     [getNextstrainJsonUrl]
   );
 
+  const queryMetadataDensity = useCallback(
+    (args: MetadataDensityRequest, callback: (res: MetadataDensityResponse) => void) => {
+      const url = `${backend_url}/metadata_density/?sid=${encodeURIComponent(sid ?? "")}`;
+      axios
+        .post(url, args)
+        .then((response) => callback(response.data as MetadataDensityResponse))
+        .catch((error) => {
+          console.error("Failed to fetch metadata density:", error);
+          callback({
+            fields: {},
+            minY: args.minY,
+            maxY: args.maxY,
+            height: args.height,
+          });
+        });
+    },
+    [backend_url, sid]
+  );
+
   return useMemo(() => {
     return {
       queryNodes,
@@ -261,6 +282,7 @@ function useServerBackend(
       backend_url: backend_url,
       getNextstrainJson,
       getNextstrainJsonUrl,
+      queryMetadataDensity,
     };
   }, [
     queryNodes,
@@ -273,6 +295,7 @@ function useServerBackend(
     backend_url,
     getNextstrainJson,
     getNextstrainJsonUrl,
+    queryMetadataDensity,
   ]);
 }
 

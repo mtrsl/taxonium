@@ -18,6 +18,7 @@ import type {
   DynamicData,
   Backend,
   MetadataDensityResponse,
+  MetadataDensityRequest,
   VisibleTipCountResponse,
 } from "../types/backend";
 import type { DeckSize, HoverInfo } from "../types/common";
@@ -32,6 +33,10 @@ import type {
   MetadataMatrixCell,
   MetadataMatrixRenderMode,
 } from "../types/metadataMatrix";
+import {
+  normalizeNumericValue,
+  parseNumericMetadataValue,
+} from "../utils/metadataMatrix";
 
 const blendWithBackground = (
   color: [number, number, number],
@@ -203,6 +208,7 @@ const createMetadataDensityCanvas = ({
   minY,
   maxY,
   isTruthyValue,
+  getValueColor,
 }: {
   cacheRef: { current: DensityCanvasCache | null };
   width: number;
@@ -215,6 +221,7 @@ const createMetadataDensityCanvas = ({
   minY: number;
   maxY: number;
   isTruthyValue: (value: unknown) => boolean;
+  getValueColor: MetadataMatrix["getValueColor"];
 }): HTMLCanvasElement | null => {
   if (
     typeof document === "undefined" ||
@@ -257,7 +264,6 @@ const createMetadataDensityCanvas = ({
   }));
 
   fieldPixelSpans.forEach(({ field, xStart, xEnd }) => {
-
     if (xEnd <= xStart) {
       return;
     }
@@ -265,22 +271,40 @@ const createMetadataDensityCanvas = ({
     const precomputedField = densityData?.fields[field.field];
     let trueCounts: Uint32Array | null = null;
     let totalCounts: Uint32Array | null = null;
+    let valueSums: Float64Array | null = null;
+    let valueCounts: Uint32Array | null = null;
 
     if (
       precomputedField &&
-      precomputedField.trueCounts.length > 0 &&
       precomputedField.totalCounts.length > 0
     ) {
-      trueCounts =
-        precomputedField.trueCounts instanceof Uint32Array
-          ? precomputedField.trueCounts
-          : Uint32Array.from(precomputedField.trueCounts);
       totalCounts =
         precomputedField.totalCounts instanceof Uint32Array
           ? precomputedField.totalCounts
           : Uint32Array.from(precomputedField.totalCounts);
+      if (field.kind === "numeric" && precomputedField.valueSums) {
+        valueSums =
+          precomputedField.valueSums instanceof Float64Array
+            ? precomputedField.valueSums
+            : Float64Array.from(precomputedField.valueSums);
+        valueCounts = precomputedField.valueCounts
+          ? precomputedField.valueCounts instanceof Uint32Array
+            ? precomputedField.valueCounts
+            : Uint32Array.from(precomputedField.valueCounts)
+          : totalCounts;
+      } else if (precomputedField.trueCounts) {
+        trueCounts =
+          precomputedField.trueCounts instanceof Uint32Array
+            ? precomputedField.trueCounts
+            : Uint32Array.from(precomputedField.trueCounts);
+      }
     } else if (allowTipNodeFallback && tipNodes && tipNodes.length > 0) {
-      trueCounts = new Uint32Array(height);
+      if (field.kind === "numeric") {
+        valueSums = new Float64Array(height);
+        valueCounts = new Uint32Array(height);
+      } else {
+        trueCounts = new Uint32Array(height);
+      }
       totalCounts = new Uint32Array(height);
       for (let nodeIndex = 0; nodeIndex < tipNodes.length; nodeIndex++) {
         const node = tipNodes[nodeIndex];
@@ -305,16 +329,27 @@ const createMetadataDensityCanvas = ({
         );
 
         for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
-          totalCounts[rowIndex] += 1;
-          if (isTruthyValue(node[field.field])) {
-            trueCounts[rowIndex] += 1;
+          if (field.kind === "numeric") {
+            const value = parseNumericMetadataValue(node[field.field]);
+            if (value !== null && valueSums && valueCounts) {
+              totalCounts[rowIndex] += 1;
+              valueSums[rowIndex] += value;
+              valueCounts[rowIndex] += 1;
+            }
+          } else {
+            totalCounts[rowIndex] += 1;
+            if (isTruthyValue(node[field.field]) && trueCounts) {
+              trueCounts[rowIndex] += 1;
+            }
           }
         }
       }
     }
 
     const sourceHeight = Math.min(
-      trueCounts?.length ?? 0,
+      field.kind === "numeric"
+        ? valueSums?.length ?? 0
+        : trueCounts?.length ?? 0,
       totalCounts?.length ?? 0
     );
 
@@ -329,18 +364,25 @@ const createMetadataDensityCanvas = ({
           : 0;
       const totalCount =
         sourceHeight > 0 && totalCounts ? totalCounts[sourceRow] : 0;
-      const color =
-        totalCount === 0
-          ? TRANSPARENT_RGBA
-          : [
-              field.color[0],
-              field.color[1],
-              field.color[2],
-              Math.round(
-                ((((trueCounts?.[sourceRow] ?? 0) as number) / totalCount) || 0) *
-                  255
-              ),
-            ];
+      let color: [number, number, number, number] = TRANSPARENT_RGBA;
+      if (totalCount > 0) {
+        if (field.kind === "numeric" && valueSums && valueCounts) {
+          const mean = valueSums[sourceRow] / valueCounts[sourceRow];
+          const normalized = normalizeNumericValue(mean, field.min, field.max);
+          const valueColor = normalized === null ? null : getValueColor(field, mean);
+          color = valueColor ? [...valueColor, 255] : TRANSPARENT_RGBA;
+        } else {
+          color = [
+            field.color[0],
+            field.color[1],
+            field.color[2],
+            Math.round(
+              ((((trueCounts?.[sourceRow] ?? 0) as number) / totalCount) || 0) *
+                255
+            ),
+          ];
+        }
+      }
 
       for (let x = xStart; x < xEnd; x++) {
         const pixelOffset = (rowIndex * width + x) * 4;
@@ -903,10 +945,9 @@ const useLayers = ({
     if (
       !metadataMatrix.isEnabled ||
       metadataRenderMode !== "density" ||
-      backend.type !== "local" ||
       !backend.queryMetadataDensity ||
       metadataMatrix.matrixFields.length === 0 ||
-      !localVisibleTipCount
+      (backend.type === "local" && !localVisibleTipCount)
     ) {
       return null;
     }
@@ -923,9 +964,12 @@ const useLayers = ({
       columnWidth: metadataMatrix.columnWidth,
       fields: metadataMatrix.matrixFields.map((field) => ({
         field: field.field,
+        kind: field.kind,
         color: field.color,
+        min: field.min,
+        max: field.max,
       })),
-    };
+    } satisfies MetadataDensityRequest;
   }, [
     backend,
     deckSize?.height,
@@ -1001,12 +1045,25 @@ const useLayers = ({
                 index * metadataMatrix.columnWidth +
                 metadataMatrix.columnWidth / 2,
               y: node.y,
-              isTrue: metadataMatrix.isTruthyValue(node[field.field]),
-              color: field.color,
+              kind: field.kind,
+              isTrue:
+                field.kind === "boolean"
+                  ? metadataMatrix.isTruthyValue(node[field.field])
+                  : undefined,
+              value:
+                field.kind === "numeric"
+                  ? parseNumericMetadataValue(node[field.field]) ?? undefined
+                  : undefined,
+              color:
+                field.kind === "numeric"
+                  ? metadataMatrix.getValueColor(field, node[field.field]) ??
+                    field.color
+                  : field.color,
             }))
           ),
     [
       metadataMatrix.columnWidth,
+      metadataMatrix.getValueColor,
       metadataMatrix.isTruthyValue,
       metadataMatrix.matrixFields,
       metadataRenderMode,
@@ -1050,6 +1107,7 @@ const useLayers = ({
               minY: densityMinY,
               maxY: densityMaxY,
               isTruthyValue: metadataMatrix.isTruthyValue,
+              getValueColor: metadataMatrix.getValueColor,
             })
         : null,
     [
@@ -1061,6 +1119,7 @@ const useLayers = ({
       metadataMatrix.columnWidth,
       metadataMatrix.isEnabled,
       metadataMatrix.isTruthyValue,
+      metadataMatrix.getValueColor,
       metadataMatrix.matrixFields,
       metadataMatrix.panelWidth,
       metadataRenderMode,
@@ -1154,13 +1213,17 @@ const useLayers = ({
           [d.x - halfWidth, d.y + halfHeight],
         ],
         getFillColor: (d: MetadataMatrixCell) =>
-          d.isTrue
-            ? [...d.color, 255]
-            : isLocalBoxRectangleMode
-              ? localFalseFillColor
-              : metadataRenderMode === "boxes"
-                ? METADATA_BOX_FALSE_RGBA
-              : TRANSPARENT_RGBA,
+          d.kind === "numeric"
+            ? d.value === undefined
+              ? TRANSPARENT_RGBA
+              : [...d.color, 255]
+            : d.isTrue
+              ? [...d.color, 255]
+              : isLocalBoxRectangleMode
+                ? localFalseFillColor
+                : metadataRenderMode === "boxes"
+                  ? METADATA_BOX_FALSE_RGBA
+                : TRANSPARENT_RGBA,
         getLineColor: (d: MetadataMatrixCell) =>
           isLocalBoxRectangleMode
             ? blendRgbTowardBackground(
@@ -1208,7 +1271,13 @@ const useLayers = ({
           [d.x - halfWidth, d.y + halfHeight],
         ],
         getFillColor: (d: MetadataMatrixCell) =>
-          d.isTrue ? [...d.color, 245] : TRANSPARENT_RGBA,
+          d.kind === "numeric"
+            ? d.value === undefined
+              ? TRANSPARENT_RGBA
+              : [...d.color, 245]
+            : d.isTrue
+              ? [...d.color, 245]
+              : TRANSPARENT_RGBA,
         updateTriggers: {
           getPolygon: [
             metadataMatrix.columnWidth,

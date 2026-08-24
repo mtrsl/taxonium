@@ -7,6 +7,7 @@ import type {
   QueryBounds,
   LocalBackend,
   MetadataDensityResponse,
+  MetadataDensityRequest,
   VisibleTipCountResponse,
 } from "../types/backend";
 import type {
@@ -243,18 +244,7 @@ function useLocalBackend(
 
   const queryMetadataDensity = useCallback(
     (
-      args: {
-        minY: number;
-        maxY: number;
-        height: number;
-        width: number;
-        outputHeight: number;
-        columnWidth: number;
-        fields: Array<{
-          field: string;
-          color: [number, number, number];
-        }>;
-      },
+      args: MetadataDensityRequest,
       callback: (res: MetadataDensityResponse) => void
     ) => {
       const key = JSON.stringify(args);

@@ -28,6 +28,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "storybook": "storybook dev -p 6006",
+    "test": "vitest",
     "build-storybook": "storybook build",
     "check-types": "tsc --noEmit"
   },

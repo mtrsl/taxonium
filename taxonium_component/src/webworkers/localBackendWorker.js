@@ -10,6 +10,12 @@ import { ReadableWebToNodeStream } from "readable-web-to-node-stream";
 import { parser } from "stream-json";
 import { streamValues } from "stream-json/streamers/StreamValues";
 import { Buffer } from "buffer";
+import {
+  classifyMetadataValues,
+  interpolateMetadataColor,
+  normalizeNumericValue,
+} from "../utils/metadataMatrix";
+import { buildNumericPrefixValues } from "../utils/metadataDensity";
 
 postMessage({ data: "Worker starting" });
 
@@ -98,10 +104,27 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 const createMetadataDensityIndex = (nodes) => {
   const tipNodes = nodes.filter((node) => node.num_tips === 1 || node.is_tip);
+  const fieldNames = new Set();
+  tipNodes.forEach((node) => {
+    Object.keys(node).forEach((field) => {
+      if (field.startsWith("meta_")) {
+        fieldNames.add(field);
+      }
+    });
+  });
+  const fieldInfo = {};
+  fieldNames.forEach((field) => {
+    const info = classifyMetadataValues(tipNodes.map((node) => node[field]));
+    if (info) {
+      fieldInfo[field] = info;
+    }
+  });
   return {
     tipNodes,
     tipYPositions: tipNodes.map((node) => node.y),
     fieldPrefixTrueCounts: {},
+    fieldPrefixNumericValues: {},
+    fieldInfo,
   };
 };
 
@@ -123,6 +146,18 @@ const ensureFieldTruePrefixCounts = (metadataDensityIndex, field) => {
     );
   }
   return metadataDensityIndex.fieldPrefixTrueCounts[field];
+};
+
+const buildFieldNumericPrefixValues = (tipNodes, field) => {
+  return buildNumericPrefixValues(tipNodes.map((node) => node[field]));
+};
+
+const ensureFieldNumericPrefixValues = (metadataDensityIndex, field) => {
+  if (!metadataDensityIndex.fieldPrefixNumericValues[field]) {
+    metadataDensityIndex.fieldPrefixNumericValues[field] =
+      buildFieldNumericPrefixValues(metadataDensityIndex.tipNodes, field);
+  }
+  return metadataDensityIndex.fieldPrefixNumericValues[field];
 };
 
 export const queryNodes = async (boundsForQueries) => {
@@ -223,6 +258,8 @@ const getConfig = async () => {
 
   const merged_config = {
     ...config,
+    metadataFields:
+      processedUploadedData.metadataDensityIndex?.fieldInfo ?? {},
     ...processedUploadedData.overwrite_config,
   };
 
@@ -309,25 +346,49 @@ const getMetadataDensity = async ({
   }
 
   const fieldResults = {};
-  fields.forEach(({ field }) => {
-    const prefixTrueCounts = ensureFieldTruePrefixCounts(
-      metadataDensityIndex,
-      field
-    );
-    const trueCounts = new Uint32Array(height);
+  fields.forEach(({ field, kind: requestedKind }) => {
+    const fieldInfo = metadataDensityIndex.fieldInfo[field];
+    const kind = requestedKind ?? fieldInfo?.kind ?? "boolean";
+    const trueCounts = kind === "boolean" ? new Uint32Array(height) : undefined;
     const totalCounts = new Uint32Array(height);
+    const valueSums = kind === "numeric" ? new Float64Array(height) : undefined;
+    const valueCounts = kind === "numeric" ? new Uint32Array(height) : undefined;
+
+    const prefixTrueCounts =
+      kind === "boolean"
+        ? ensureFieldTruePrefixCounts(metadataDensityIndex, field)
+        : null;
+    const prefixNumericValues =
+      kind === "numeric"
+        ? ensureFieldNumericPrefixValues(metadataDensityIndex, field)
+        : null;
 
     for (let rowIndex = 0; rowIndex < height; rowIndex++) {
       const startTipIndex = rowLowerBounds[rowIndex];
       const endTipExclusive = rowUpperBounds[rowIndex];
-      totalCounts[rowIndex] = endTipExclusive - startTipIndex;
-      trueCounts[rowIndex] =
-        prefixTrueCounts[endTipExclusive] - prefixTrueCounts[startTipIndex];
+      if (kind === "numeric" && prefixNumericValues) {
+        valueSums[rowIndex] =
+          prefixNumericValues.sums[endTipExclusive] -
+          prefixNumericValues.sums[startTipIndex];
+        valueCounts[rowIndex] =
+          prefixNumericValues.counts[endTipExclusive] -
+          prefixNumericValues.counts[startTipIndex];
+        totalCounts[rowIndex] = valueCounts[rowIndex];
+      } else if (prefixTrueCounts && trueCounts) {
+        totalCounts[rowIndex] = endTipExclusive - startTipIndex;
+        trueCounts[rowIndex] =
+          prefixTrueCounts[endTipExclusive] - prefixTrueCounts[startTipIndex];
+      }
     }
 
     fieldResults[field] = {
+      kind,
       trueCounts,
       totalCounts,
+      valueSums,
+      valueCounts,
+      min: fieldInfo?.min,
+      max: fieldInfo?.max,
     };
   });
 
@@ -339,13 +400,19 @@ const getMetadataDensity = async ({
     xEnd: Math.min(width, Math.ceil(12 + (fieldIndex + 1) * columnWidth - 1)),
   }));
 
-  fieldPixelSpans.forEach(({ field, color, xStart, xEnd }) => {
+  fieldPixelSpans.forEach(({ field, color, xStart, xEnd }, fieldIndex) => {
     if (xEnd <= xStart) {
       return;
     }
     const fieldResult = fieldResults[field];
-    const { trueCounts, totalCounts } = fieldResult;
-    const sourceHeight = Math.min(trueCounts.length, totalCounts.length);
+    const { trueCounts, totalCounts, valueSums, valueCounts } = fieldResult;
+    const fieldConfig = fields[fieldIndex];
+    const fieldInfo = metadataDensityIndex.fieldInfo[field];
+    const kind = fieldConfig.kind ?? fieldInfo?.kind ?? "boolean";
+    const sourceHeight = Math.min(
+      kind === "numeric" ? valueSums.length : trueCounts.length,
+      totalCounts.length
+    );
 
     for (let rowIndex = 0; rowIndex < outputHeight; rowIndex++) {
       const sourceRow =
@@ -357,15 +424,30 @@ const getMetadataDensity = async ({
             )
           : 0;
       const totalCount = sourceHeight > 0 ? totalCounts[sourceRow] : 0;
-      const fillColor =
-        totalCount === 0
-          ? [0, 0, 0, 0]
-          : [
-              color[0],
-              color[1],
-              color[2],
-              Math.round((trueCounts[sourceRow] / totalCount) * 255),
-            ];
+      let fillColor;
+      if (totalCount === 0) {
+        fillColor = [0, 0, 0, 0];
+      } else if (kind === "numeric" && valueSums && valueCounts) {
+        const mean = valueSums[sourceRow] / valueCounts[sourceRow];
+        const fraction = normalizeNumericValue(
+          mean,
+          fieldConfig.min ?? fieldInfo?.min,
+          fieldConfig.max ?? fieldInfo?.max
+        );
+        const clampedFraction = fraction ?? 0;
+        fillColor = [...interpolateMetadataColor(
+          [244, 244, 244],
+          color,
+          clampedFraction
+        ), 255];
+      } else {
+        fillColor = [
+          color[0],
+          color[1],
+          color[2],
+          Math.round(((trueCounts?.[sourceRow] ?? 0) / totalCount) * 255),
+        ];
+      }
 
       for (let x = xStart; x < xEnd; x++) {
         const pixelOffset = (rowIndex * width + x) * 4;

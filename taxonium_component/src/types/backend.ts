@@ -1,6 +1,7 @@
 import type { Node, Mutation } from "./node";
 import type React from "react";
 import type { ColorRamps } from "./common";
+import type { MetadataFieldInfo } from "../utils/metadataMatrix";
 
 export interface SearchType {
   name: string;
@@ -47,6 +48,7 @@ export interface Config {
   colorBy?: {
     colorByOptions: string[];
   };
+  metadataFields?: Record<string, MetadataFieldInfo>;
   search_types?: SearchType[];
   overlay?: React.ReactNode;
   [key: string]: unknown;
@@ -101,8 +103,13 @@ export interface DynamicDataWithLookup {
 }
 
 export interface MetadataDensityField {
-  trueCounts: Uint32Array | number[];
+  kind?: "boolean" | "numeric";
+  trueCounts?: Uint32Array | number[];
   totalCounts: Uint32Array | number[];
+  valueSums?: Float64Array | number[];
+  valueCounts?: Uint32Array | number[];
+  min?: number;
+  max?: number;
 }
 
 export interface MetadataDensityBitmap {
@@ -117,6 +124,22 @@ export interface MetadataDensityResponse {
   maxY: number;
   height: number;
   bitmap?: MetadataDensityBitmap;
+}
+
+export interface MetadataDensityRequest {
+  minY: number;
+  maxY: number;
+  height: number;
+  width: number;
+  outputHeight: number;
+  columnWidth: number;
+  fields: Array<{
+    field: string;
+    kind: "boolean" | "numeric";
+    color: [number, number, number];
+    min?: number;
+    max?: number;
+  }>;
 }
 
 export interface VisibleTipCountResponse {
@@ -155,18 +178,7 @@ export interface BaseBackend {
     callback: (err: unknown, data: unknown) => void
   ): void;
   queryMetadataDensity?(
-    args: {
-      minY: number;
-      maxY: number;
-      height: number;
-      width: number;
-      outputHeight: number;
-      columnWidth: number;
-      fields: Array<{
-        field: string;
-        color: [number, number, number];
-      }>;
-    },
+    args: MetadataDensityRequest,
     callback: (res: MetadataDensityResponse) => void
   ): void;
   queryVisibleTipCount?(

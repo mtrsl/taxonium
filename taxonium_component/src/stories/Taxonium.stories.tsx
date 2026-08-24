@@ -96,11 +96,11 @@ export const ConfigTree = {
 };
 
 const nwk = `((A:0.1,B:0.2):0.3,(C:0.4,D:0.5):0.6);`;
-const metadata_text = `Node,Name,Species,Vaccinated,HostJump,Sampled
-A,Bob,Cow,true,false,yes
-B,Jim,Cow,false,false,no
-C,Joe,Fish,true,true,yes
-D,John,Fish,false,true,no`;
+const metadata_text = `Node,Name,Species,Vaccinated,HostJump,Sampled,Temperature
+A,Bob,Cow,true,false,yes,12.5
+B,Jim,Cow,false,false,no,15
+C,Joe,Fish,true,true,yes,18.5
+D,John,Fish,false,true,no,`;
 
 const metadata = {
   filename: "test.csv",
@@ -135,7 +135,12 @@ export const LocalDataWithMetadataMatrix = {
     },
     query: {
       metadataMatrix: JSON.stringify({
-        fields: ["meta_Vaccinated", "meta_HostJump", "meta_Sampled"],
+        fields: [
+          "meta_Vaccinated",
+          "meta_HostJump",
+          "meta_Sampled",
+          "meta_Temperature",
+        ],
         colors: {
           meta_Vaccinated: [12, 34, 56],
         },

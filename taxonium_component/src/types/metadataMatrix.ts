@@ -1,6 +1,11 @@
 import type { Node } from "./node";
+import type {
+  MetadataFieldInfo,
+  MetadataFieldKind,
+  MetadataMatrixColor,
+} from "../utils/metadataMatrix";
 
-export type MetadataMatrixColor = [number, number, number];
+export type { MetadataFieldInfo, MetadataFieldKind, MetadataMatrixColor };
 
 export interface MetadataMatrixConfig {
   fields: string[];
@@ -11,6 +16,9 @@ export interface MetadataMatrixField {
   field: string;
   label: string;
   color: MetadataMatrixColor;
+  kind: MetadataFieldKind;
+  min?: number;
+  max?: number;
 }
 
 export interface MetadataMatrixCell {
@@ -18,7 +26,9 @@ export interface MetadataMatrixCell {
   field: string;
   x: number;
   y: number;
-  isTrue: boolean;
+  kind: MetadataFieldKind;
+  isTrue?: boolean;
+  value?: number;
   color: MetadataMatrixColor;
 }
 
@@ -49,6 +59,7 @@ export interface MetadataMatrixHeader {
 export interface MetadataMatrix {
   selectedFields: string[];
   availableFields: string[];
+  fieldInfo: Record<string, MetadataFieldInfo>;
   matrixFields: MetadataMatrixField[];
   isEnabled: boolean;
   panelWidth: number;
@@ -61,4 +72,8 @@ export interface MetadataMatrix {
   getFieldColor: (field: string) => MetadataMatrixColor;
   setFieldColor: (field: string, color: MetadataMatrixColor) => void;
   isTruthyValue: (value: unknown) => boolean;
+  getValueColor: (
+    field: MetadataMatrixField,
+    value: unknown
+  ) => MetadataMatrixColor | null;
 }

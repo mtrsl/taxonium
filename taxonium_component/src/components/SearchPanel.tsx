@@ -461,7 +461,7 @@ function SearchPanel({
           </div>
           {metadataMatrix.availableFields.length === 0 ? (
             <p className="text-xs text-gray-500">
-              No boolean metadata columns detected.
+              No boolean or numerical metadata columns detected.
             </p>
           ) : (
             <>
@@ -480,7 +480,18 @@ function SearchPanel({
                           onChange={() => metadataMatrix.toggleField(field)}
                         />
                         <span className="truncate">{label}</span>
+                        {metadataMatrix.fieldInfo[field]?.kind === "numeric" && (
+                          <span className="text-[10px] text-gray-400 shrink-0">
+                            numeric
+                          </span>
+                        )}
                       </label>
+                      {metadataMatrix.fieldInfo[field]?.kind === "numeric" && (
+                        <span className="text-[10px] text-gray-400 shrink-0">
+                          {metadataMatrix.fieldInfo[field]?.min}–
+                          {metadataMatrix.fieldInfo[field]?.max}
+                        </span>
+                      )}
                       <ColorSwatchPicker
                         color={metadataMatrix.getFieldColor(field)}
                         setColor={(color) => metadataMatrix.setFieldColor(field, color)}
