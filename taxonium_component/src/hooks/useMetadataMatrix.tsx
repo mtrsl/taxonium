@@ -9,8 +9,10 @@ import type {
 } from "../types/metadataMatrix";
 import {
   classifyMetadataValues,
+  DEFAULT_METADATA_MATRIX_COLUMN_WIDTH,
   interpolateMetadataColor,
   normalizeMetadataValue,
+  normalizeMetadataMatrixColumnWidth,
   normalizeNumericValue,
   TRUE_VALUES,
   type MetadataFieldInfo,
@@ -79,10 +81,12 @@ const uniqueFields = (fields: string[]) =>
 
 const serializeConfig = (
   fields: string[],
-  colors: Record<string, MetadataMatrixColor>
+  colors: Record<string, MetadataMatrixColor>,
+  columnWidth: number
 ) => {
   const nextConfig: MetadataMatrixConfig = {
     fields: uniqueFields(fields),
+    columnWidth: normalizeMetadataMatrixColumnWidth(columnWidth),
   };
   if (Object.keys(colors).length > 0) {
     nextConfig.colors = colors;
@@ -105,6 +109,7 @@ const sanitizeConfig = (rawConfig: string | undefined): MetadataMatrixConfig => 
           )
         : [],
       colors: sanitizeColors(parsed.colors),
+      columnWidth: normalizeMetadataMatrixColumnWidth(parsed.columnWidth),
     };
   } catch {
     return { fields: [] };
@@ -191,11 +196,16 @@ const useMetadataMatrix = ({
       updateQuery({
         metadataMatrix: serializeConfig(
           fields,
-          metadataMatrixConfig.colors ?? {}
+          metadataMatrixConfig.colors ?? {},
+          metadataMatrixConfig.columnWidth ?? DEFAULT_METADATA_MATRIX_COLUMN_WIDTH
         ),
       });
     },
-    [metadataMatrixConfig.colors, updateQuery]
+    [
+      metadataMatrixConfig.colors,
+      metadataMatrixConfig.columnWidth,
+      updateQuery,
+    ]
   );
 
   const getFieldColor = useCallback(
@@ -213,13 +223,22 @@ const useMetadataMatrix = ({
         clampCustomColorChannel(color[2]),
       ];
       updateQuery({
-        metadataMatrix: serializeConfig(metadataMatrixConfig.fields, {
-          ...(metadataMatrixConfig.colors ?? {}),
-          [field]: sanitizedColor,
-        }),
+        metadataMatrix: serializeConfig(
+          metadataMatrixConfig.fields,
+          {
+            ...(metadataMatrixConfig.colors ?? {}),
+            [field]: sanitizedColor,
+          },
+          metadataMatrixConfig.columnWidth ?? DEFAULT_METADATA_MATRIX_COLUMN_WIDTH
+        ),
       });
     },
-    [metadataMatrixConfig.colors, metadataMatrixConfig.fields, updateQuery]
+    [
+      metadataMatrixConfig.colors,
+      metadataMatrixConfig.columnWidth,
+      metadataMatrixConfig.fields,
+      updateQuery,
+    ]
   );
 
   const toggleField = useCallback(
@@ -262,6 +281,19 @@ const useMetadataMatrix = ({
     }));
   }, [config, fieldInfo, getFieldColor, selectedFields]);
 
+  const setColumnWidth = useCallback(
+    (nextColumnWidth: number) => {
+      updateQuery({
+        metadataMatrix: serializeConfig(
+          metadataMatrixConfig.fields,
+          metadataMatrixConfig.colors ?? {},
+          nextColumnWidth
+        ),
+      });
+    },
+    [metadataMatrixConfig.colors, metadataMatrixConfig.fields, updateQuery]
+  );
+
   const getValueColor = useCallback(
     (field: MetadataMatrix["matrixFields"][number], value: unknown) => {
       if (field.kind === "boolean") {
@@ -273,7 +305,9 @@ const useMetadataMatrix = ({
     [matrixFields]
   );
 
-  const columnWidth = 24;
+  const columnWidth = normalizeMetadataMatrixColumnWidth(
+    metadataMatrixConfig.columnWidth
+  );
   const cellSize = 14;
   const headerHeight = 88;
   const panelWidth = matrixFields.length
@@ -290,6 +324,7 @@ const useMetadataMatrix = ({
       panelWidth,
       headerHeight,
       columnWidth,
+      setColumnWidth,
       cellSize,
       setSelectedFields,
       toggleField,
@@ -307,6 +342,7 @@ const useMetadataMatrix = ({
       panelWidth,
       headerHeight,
       columnWidth,
+      setColumnWidth,
       cellSize,
       setSelectedFields,
       toggleField,

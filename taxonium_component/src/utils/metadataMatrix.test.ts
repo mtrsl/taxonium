@@ -2,6 +2,7 @@ import {
   classifyMetadataValues,
   interpolateMetadataColor,
   normalizeNumericValue,
+  normalizeMetadataMatrixColumnWidth,
   parseNumericMetadataValue,
 } from "./metadataMatrix";
 import {
@@ -11,6 +12,14 @@ import {
 import { describe, expect, it } from "vitest";
 
 describe("metadata matrix field classification", () => {
+  it("normalizes metadata lane widths to the supported range", () => {
+    expect(normalizeMetadataMatrixColumnWidth(undefined)).toBe(24);
+    expect(normalizeMetadataMatrixColumnWidth("invalid")).toBe(24);
+    expect(normalizeMetadataMatrixColumnWidth(1)).toBe(12);
+    expect(normalizeMetadataMatrixColumnWidth(80.4)).toBe(80);
+    expect(normalizeMetadataMatrixColumnWidth(100)).toBe(80);
+  });
+
   it("keeps boolean-like fields boolean", () => {
     expect(classifyMetadataValues(["true", "false", "", "1"])).toEqual({
       kind: "boolean",

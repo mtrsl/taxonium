@@ -30,6 +30,7 @@ import { Toaster } from "react-hot-toast";
 import type { DeckSize } from "./types/common";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import type { MetadataMatrixConfig } from "./types/metadataMatrix";
+import { normalizeMetadataMatrixColumnWidth } from "./utils/metadataMatrix";
 
 interface SourceData {
   status: string;
@@ -110,6 +111,9 @@ function Taxonium({
   const selectedMetadataFieldCount = Array.isArray(parsedMetadataMatrix.fields)
     ? parsedMetadataMatrix.fields.length
     : 0;
+  const metadataMatrixColumnWidth = normalizeMetadataMatrixColumnWidth(
+    parsedMetadataMatrix.columnWidth
+  );
 
   // if no onSetTitle, set it to a noop
   if (!onSetTitle) {
@@ -139,7 +143,10 @@ function Taxonium({
     deckSize,
     mouseDownIsMinimap,
     metadataMatrixWidth: selectedMetadataFieldCount
-      ? Math.max(120, selectedMetadataFieldCount * 24 + 24)
+      ? Math.max(
+          120,
+          selectedMetadataFieldCount * metadataMatrixColumnWidth + 24
+        )
       : 0,
   });
   const mainDeckSize = useMemo(

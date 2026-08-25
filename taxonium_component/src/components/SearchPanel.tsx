@@ -27,6 +27,10 @@ import { useState, useMemo, useEffect, ChangeEvent } from "react";
 import classNames from "classnames";
 
 import SearchDisplayToggle from "./SearchDisplayToggle";
+import {
+  MAX_METADATA_MATRIX_COLUMN_WIDTH,
+  MIN_METADATA_MATRIX_COLUMN_WIDTH,
+} from "../utils/metadataMatrix";
 
 const prettify_x_types = { x_dist: "Distance", x_time: "Time" };
 
@@ -459,6 +463,26 @@ function SearchPanel({
               </span>
             )}
           </div>
+          {metadataMatrix.availableFields.length > 0 && (
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <span>Lane width</span>
+              <input
+                type="range"
+                min={MIN_METADATA_MATRIX_COLUMN_WIDTH}
+                max={MAX_METADATA_MATRIX_COLUMN_WIDTH}
+                step="1"
+                value={metadataMatrix.columnWidth}
+                onChange={(event) =>
+                  metadataMatrix.setColumnWidth(Number(event.target.value))
+                }
+                aria-label="Metadata matrix lane width"
+                className="flex-1"
+              />
+              <span className="w-12 text-right text-gray-500">
+                {metadataMatrix.columnWidth}px
+              </span>
+            </label>
+          )}
           {metadataMatrix.availableFields.length === 0 ? (
             <p className="text-xs text-gray-500">
               No boolean or numerical metadata columns detected.

@@ -10,6 +10,7 @@ export type { MetadataFieldInfo, MetadataFieldKind, MetadataMatrixColor };
 export interface MetadataMatrixConfig {
   fields: string[];
   colors?: Record<string, MetadataMatrixColor>;
+  columnWidth?: number;
 }
 
 export interface MetadataMatrixField {
@@ -65,6 +66,7 @@ export interface MetadataMatrix {
   panelWidth: number;
   headerHeight: number;
   columnWidth: number;
+  setColumnWidth: (columnWidth: number) => void;
   cellSize: number;
   setSelectedFields: (fields: string[]) => void;
   toggleField: (field: string) => void;

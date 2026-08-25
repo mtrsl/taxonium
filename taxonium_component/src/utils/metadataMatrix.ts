@@ -6,6 +6,26 @@ export interface MetadataFieldInfo {
 
 export type MetadataMatrixColor = [number, number, number];
 
+export const DEFAULT_METADATA_MATRIX_COLUMN_WIDTH = 24;
+export const MIN_METADATA_MATRIX_COLUMN_WIDTH = 12;
+export const MAX_METADATA_MATRIX_COLUMN_WIDTH = 80;
+
+export const normalizeMetadataMatrixColumnWidth = (value: unknown): number => {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return DEFAULT_METADATA_MATRIX_COLUMN_WIDTH;
+  }
+
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_METADATA_MATRIX_COLUMN_WIDTH;
+  }
+
+  return Math.max(
+    MIN_METADATA_MATRIX_COLUMN_WIDTH,
+    Math.min(MAX_METADATA_MATRIX_COLUMN_WIDTH, Math.round(parsed))
+  );
+};
+
 export const TRUE_VALUES = new Set(["true", "1", "yes", "y", "t"]);
 export const FALSE_VALUES = new Set(["false", "0", "no", "n", "f", ""]);
 
