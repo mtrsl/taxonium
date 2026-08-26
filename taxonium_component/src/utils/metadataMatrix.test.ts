@@ -1,5 +1,7 @@
 import {
   classifyMetadataValues,
+  filterMetadataKeysForTooltip,
+  formatMetadataMatrixHoverValue,
   interpolateMetadataColor,
   normalizeNumericValue,
   normalizeMetadataMatrixColumnWidth,
@@ -12,6 +14,23 @@ import {
 import { describe, expect, it } from "vitest";
 
 describe("metadata matrix field classification", () => {
+  it("formats values for the lane hover readout", () => {
+    expect(formatMetadataMatrixHoverValue("numeric", 1.25)).toBe("1.25");
+    expect(formatMetadataMatrixHoverValue("numeric", "")).toBe("0.0");
+    expect(formatMetadataMatrixHoverValue("numeric", "invalid")).toBe("0.0");
+    expect(formatMetadataMatrixHoverValue("boolean", "yes")).toBe("true");
+    expect(formatMetadataMatrixHoverValue("boolean", "false")).toBe("false");
+  });
+
+  it("removes only fields rendered in annotation lanes from the tooltip", () => {
+    expect(
+      filterMetadataKeysForTooltip(
+        ["country", "meta_score", "meta_flag"],
+        [{ field: "meta_score" }]
+      )
+    ).toEqual(["country", "meta_flag"]);
+  });
+
   it("normalizes metadata lane widths to the supported range", () => {
     expect(normalizeMetadataMatrixColumnWidth(undefined)).toBe(24);
     expect(normalizeMetadataMatrixColumnWidth("invalid")).toBe(24);

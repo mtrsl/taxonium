@@ -3,6 +3,8 @@ import type { Mutation, Node } from "../types/node";
 import type { HoverDetailsState } from "../types/ui";
 import type { DeckSize, HoverInfo } from "../types/common";
 import type { Config } from "../types/backend";
+import type { MetadataMatrix } from "../types/metadataMatrix";
+import { filterMetadataKeysForTooltip } from "../utils/metadataMatrix";
 import type { ColorHook, ColorBy } from "../types/color";
 
 const fixName = (name: string) => {
@@ -23,6 +25,7 @@ interface NodeHoverTipProps {
   colorHook: ColorHook;
   colorBy: ColorBy;
   config: Config;
+  metadataMatrix: MetadataMatrix;
   filterMutations: (mutations: Mutation[]) => Mutation[];
   deckSize: DeckSize;
 }
@@ -33,11 +36,15 @@ const NodeHoverTip = ({
   colorHook,
   colorBy,
   config,
+  metadataMatrix,
   filterMutations,
   deckSize,
 }: NodeHoverTipProps) => {
   const nameAccessor = config.name_accessor as string;
-  const keysToDisplay = (config.keys_to_display as string[]) || [];
+  const keysToDisplay = filterMetadataKeysForTooltip(
+    (config.keys_to_display as string[]) || [],
+    metadataMatrix.matrixFields
+  );
   const metadataTypes = config.metadataTypes as Record<string, string> | undefined;
   const initial_mutations = useMemo(() => {
     if (hoverInfo && hoverInfo.object && hoverInfo.object.mutations) {

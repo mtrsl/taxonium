@@ -26,6 +26,25 @@ export const normalizeMetadataMatrixColumnWidth = (value: unknown): number => {
   );
 };
 
+export const formatMetadataMatrixHoverValue = (
+  kind: MetadataFieldKind,
+  value: unknown
+): string => {
+  if (kind === "numeric") {
+    const numeric = parseNumericMetadataValue(value);
+    return numeric === null ? "0.0" : String(numeric);
+  }
+  return TRUE_VALUES.has(normalizeMetadataValue(value)) ? "true" : "false";
+};
+
+export const filterMetadataKeysForTooltip = (
+  keys: string[],
+  matrixFields: Array<{ field: string }>
+): string[] => {
+  const renderedFields = new Set(matrixFields.map(({ field }) => field));
+  return keys.filter((key) => !renderedFields.has(key));
+};
+
 export const TRUE_VALUES = new Set(["true", "1", "yes", "y", "t"]);
 export const FALSE_VALUES = new Set(["false", "0", "no", "n", "f", ""]);
 

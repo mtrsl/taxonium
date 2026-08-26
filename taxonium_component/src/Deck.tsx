@@ -16,6 +16,7 @@ import "react-circular-progressbar/dist/styles.css";
 
 import useSnapshot from "./hooks/useSnapshot";
 import NodeHoverTip from "./components/NodeHoverTip";
+import MetadataMatrixHoverValues from "./components/MetadataMatrixHoverValues";
 import TreenomeMutationHoverTip from "./components/TreenomeMutationHoverTip";
 import { DeckButtons } from "./components/DeckButtons";
 import DeckSettingsModal from "./components/DeckSettingsModal";
@@ -348,8 +349,14 @@ function Deck({
         colorHook={colorHook}
         colorBy={colorBy}
         config={config}
+        metadataMatrix={metadataMatrix}
         filterMutations={settings.filterMutations}
         deckSize={deckSize}
+      />
+      <MetadataMatrixHoverValues
+        hoverInfo={hoverInfo as HoverInfo<Node> | null}
+        metadataMatrix={metadataMatrix}
+        metadataViewX={view.layout.metadataViewX}
       />
       <TreenomeMutationHoverTip
         hoverInfo={hoverInfo as HoverInfo<{ m?: Mutation }> | null}
