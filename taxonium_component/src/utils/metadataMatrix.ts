@@ -18,7 +18,6 @@ export const darkenMetadataColor = (
 export const DEFAULT_METADATA_MATRIX_COLUMN_WIDTH = 24;
 export const MIN_METADATA_MATRIX_COLUMN_WIDTH = 12;
 export const MAX_METADATA_MATRIX_COLUMN_WIDTH = 80;
-export const METADATA_MATRIX_HOVER_ROW_OFFSET = 9;
 
 export const normalizeMetadataMatrixColumnWidth = (value: unknown): number => {
   if (value === null || value === undefined || String(value).trim() === "") {
@@ -36,18 +35,13 @@ export const normalizeMetadataMatrixColumnWidth = (value: unknown): number => {
   );
 };
 
-export const getMetadataMatrixHoverRowOffset = (index: number): number =>
-  index % 2 === 0
-    ? -METADATA_MATRIX_HOVER_ROW_OFFSET
-    : METADATA_MATRIX_HOVER_ROW_OFFSET;
-
 export const formatMetadataMatrixHoverValue = (
   kind: MetadataFieldKind,
   value: unknown
 ): string => {
   if (kind === "numeric") {
     const numeric = parseNumericMetadataValue(value);
-    return numeric === null ? "0.0" : String(numeric);
+    return numeric === null ? "0.0" : numeric.toFixed(4);
   }
   return TRUE_VALUES.has(normalizeMetadataValue(value)) ? "true" : "false";
 };

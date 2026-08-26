@@ -3,7 +3,6 @@ import {
   darkenMetadataColor,
   filterMetadataKeysForTooltip,
   formatMetadataMatrixHoverValue,
-  getMetadataMatrixHoverRowOffset,
   interpolateMetadataColor,
   normalizeNumericValue,
   normalizeMetadataMatrixColumnWidth,
@@ -20,14 +19,9 @@ describe("metadata matrix field classification", () => {
     expect(darkenMetadataColor([100, 150, 200])).toEqual([65, 98, 130]);
   });
 
-  it("alternates hover values above and below the hovered node", () => {
-    expect(getMetadataMatrixHoverRowOffset(0)).toBe(-9);
-    expect(getMetadataMatrixHoverRowOffset(1)).toBe(9);
-    expect(getMetadataMatrixHoverRowOffset(2)).toBe(-9);
-  });
-
   it("formats values for the lane hover readout", () => {
-    expect(formatMetadataMatrixHoverValue("numeric", 1.25)).toBe("1.25");
+    expect(formatMetadataMatrixHoverValue("numeric", 1.25)).toBe("1.2500");
+    expect(formatMetadataMatrixHoverValue("numeric", 0.123456)).toBe("0.1235");
     expect(formatMetadataMatrixHoverValue("numeric", "")).toBe("0.0");
     expect(formatMetadataMatrixHoverValue("numeric", "invalid")).toBe("0.0");
     expect(formatMetadataMatrixHoverValue("boolean", "yes")).toBe("true");

@@ -3,7 +3,6 @@ import type { Node } from "../types/node";
 import type { MetadataMatrix } from "../types/metadataMatrix";
 import {
   formatMetadataMatrixHoverValue,
-  getMetadataMatrixHoverRowOffset,
   darkenMetadataColor,
 } from "../utils/metadataMatrix";
 
@@ -30,8 +29,7 @@ const MetadataMatrixHoverValues = ({
         top: `${hoverInfo.y}px`,
         left: `${metadataViewX}px`,
         width: `${metadataMatrix.panelWidth}px`,
-        height: "18px",
-        transform: "translateY(-50%)",
+        height: "0px",
         pointerEvents: "none",
         zIndex: 3,
       }}
@@ -48,13 +46,15 @@ const MetadataMatrixHoverValues = ({
             style={{
               position: "absolute",
               left: `${12 + index * metadataMatrix.columnWidth}px`,
-              top: `${getMetadataMatrixHoverRowOffset(index)}px`,
+              top: "0px",
               width: `${metadataMatrix.columnWidth}px`,
-              height: "18px",
+              height: "0px",
               overflow: "visible",
               whiteSpace: "nowrap",
               textAlign: "center",
-              lineHeight: "18px",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "flex-end",
               color: `rgb(${darkenMetadataColor(field.color).join(", ")})`,
               fontSize: "10px",
               fontWeight: 700,
@@ -63,10 +63,13 @@ const MetadataMatrixHoverValues = ({
             <span
               style={{
                 display: "inline-block",
+                writingMode: "vertical-rl",
+                transform: "rotate(180deg)",
                 backgroundColor: "rgba(255, 255, 255, 0.65)",
                 borderRadius: "2px",
                 boxShadow: "0 0 2px rgba(0, 0, 0, 0.25)",
-                lineHeight: "16px",
+                lineHeight: 1,
+                textAlign: "left",
                 textShadow: "0 0 1px rgba(255, 255, 255, 0.9)",
               }}
             >
