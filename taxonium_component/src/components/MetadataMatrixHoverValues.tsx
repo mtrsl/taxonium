@@ -1,7 +1,10 @@
 import type { HoverInfo } from "../types/common";
 import type { Node } from "../types/node";
 import type { MetadataMatrix } from "../types/metadataMatrix";
-import { formatMetadataMatrixHoverValue } from "../utils/metadataMatrix";
+import {
+  formatMetadataMatrixHoverValue,
+  getMetadataMatrixHoverRowOffset,
+} from "../utils/metadataMatrix";
 
 interface MetadataMatrixHoverValuesProps {
   hoverInfo: HoverInfo<Node> | null;
@@ -44,6 +47,7 @@ const MetadataMatrixHoverValues = ({
             style={{
               position: "absolute",
               left: `${12 + index * metadataMatrix.columnWidth}px`,
+              top: `${getMetadataMatrixHoverRowOffset(index)}px`,
               width: `${metadataMatrix.columnWidth}px`,
               height: "18px",
               overflow: "visible",

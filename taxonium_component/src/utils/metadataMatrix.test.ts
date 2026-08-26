@@ -2,6 +2,7 @@ import {
   classifyMetadataValues,
   filterMetadataKeysForTooltip,
   formatMetadataMatrixHoverValue,
+  getMetadataMatrixHoverRowOffset,
   interpolateMetadataColor,
   normalizeNumericValue,
   normalizeMetadataMatrixColumnWidth,
@@ -14,6 +15,12 @@ import {
 import { describe, expect, it } from "vitest";
 
 describe("metadata matrix field classification", () => {
+  it("alternates hover values above and below the hovered node", () => {
+    expect(getMetadataMatrixHoverRowOffset(0)).toBe(-9);
+    expect(getMetadataMatrixHoverRowOffset(1)).toBe(9);
+    expect(getMetadataMatrixHoverRowOffset(2)).toBe(-9);
+  });
+
   it("formats values for the lane hover readout", () => {
     expect(formatMetadataMatrixHoverValue("numeric", 1.25)).toBe("1.25");
     expect(formatMetadataMatrixHoverValue("numeric", "")).toBe("0.0");
