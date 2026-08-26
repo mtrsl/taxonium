@@ -1,5 +1,6 @@
 import {
   classifyMetadataValues,
+  darkenMetadataColor,
   filterMetadataKeysForTooltip,
   formatMetadataMatrixHoverValue,
   getMetadataMatrixHoverRowOffset,
@@ -15,6 +16,10 @@ import {
 import { describe, expect, it } from "vitest";
 
 describe("metadata matrix field classification", () => {
+  it("darkens lane colours for hover labels", () => {
+    expect(darkenMetadataColor([100, 150, 200])).toEqual([65, 98, 130]);
+  });
+
   it("alternates hover values above and below the hovered node", () => {
     expect(getMetadataMatrixHoverRowOffset(0)).toBe(-9);
     expect(getMetadataMatrixHoverRowOffset(1)).toBe(9);

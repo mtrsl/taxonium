@@ -6,6 +6,15 @@ export interface MetadataFieldInfo {
 
 export type MetadataMatrixColor = [number, number, number];
 
+export const darkenMetadataColor = (
+  color: MetadataMatrixColor,
+  factor = 0.65
+): MetadataMatrixColor => [
+  Math.round(color[0] * factor),
+  Math.round(color[1] * factor),
+  Math.round(color[2] * factor),
+];
+
 export const DEFAULT_METADATA_MATRIX_COLUMN_WIDTH = 24;
 export const MIN_METADATA_MATRIX_COLUMN_WIDTH = 12;
 export const MAX_METADATA_MATRIX_COLUMN_WIDTH = 80;

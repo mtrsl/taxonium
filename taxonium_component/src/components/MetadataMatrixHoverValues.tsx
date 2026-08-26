@@ -4,6 +4,7 @@ import type { MetadataMatrix } from "../types/metadataMatrix";
 import {
   formatMetadataMatrixHoverValue,
   getMetadataMatrixHoverRowOffset,
+  darkenMetadataColor,
 } from "../utils/metadataMatrix";
 
 interface MetadataMatrixHoverValuesProps {
@@ -54,7 +55,7 @@ const MetadataMatrixHoverValues = ({
               whiteSpace: "nowrap",
               textAlign: "center",
               lineHeight: "18px",
-              color: `rgb(${field.color[0]}, ${field.color[1]}, ${field.color[2]})`,
+              color: `rgb(${darkenMetadataColor(field.color).join(", ")})`,
               fontSize: "10px",
               fontWeight: 700,
             }}
@@ -62,8 +63,7 @@ const MetadataMatrixHoverValues = ({
             <span
               style={{
                 display: "inline-block",
-                padding: "0 3px",
-                backgroundColor: "rgba(255, 255, 255, 0.88)",
+                backgroundColor: "rgba(255, 255, 255, 0.65)",
                 borderRadius: "2px",
                 boxShadow: "0 0 2px rgba(0, 0, 0, 0.25)",
                 lineHeight: "16px",
