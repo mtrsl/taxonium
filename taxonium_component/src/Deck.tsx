@@ -36,6 +36,7 @@ import type { DeckSize, HoverInfo } from "./types/common";
 import type { Node, Mutation } from "./types/node";
 import type { ColorHook, ColorBy } from "./types/color";
 import type { MetadataMatrix } from "./types/metadataMatrix";
+import { darkenMetadataColor } from "./utils/metadataMatrix";
 
 const MemoizedKey = React.memo(Key);
 
@@ -448,11 +449,16 @@ function Deck({
                     style={{
                       writingMode: "vertical-rl",
                       transform: "rotate(180deg)",
-                      color: `rgb(${field.color[0]}, ${field.color[1]}, ${field.color[2]})`,
+                      color: `rgb(${darkenMetadataColor(field.color).join(", ")})`,
                       fontSize: "11px",
                       lineHeight: 1,
                       fontWeight: 600,
                       textAlign: "left",
+                      display: "inline-block",
+                      backgroundColor: "rgba(255, 255, 255, 0.65)",
+                      borderRadius: "2px",
+                      boxShadow: "0 0 2px rgba(0, 0, 0, 0.25)",
+                      textShadow: "0 0 1px rgba(255, 255, 255, 0.9)",
                     }}
                   >
                     {field.label}
