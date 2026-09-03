@@ -65,12 +65,12 @@ const MetadataMatrixHoverValues = ({
                 display: "inline-block",
                 writingMode: "vertical-rl",
                 transform: "rotate(180deg)",
-                backgroundColor: "rgba(255, 255, 255, 0.65)",
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
                 borderRadius: "2px",
                 boxShadow: "0 0 2px rgba(0, 0, 0, 0.25)",
                 lineHeight: 1,
                 textAlign: "left",
-                textShadow: "0 0 1px rgba(255, 255, 255, 0.9)",
+                textShadow: "0 0 2px rgba(255, 255, 255, 0.9)",
               }}
             >
               {value}
