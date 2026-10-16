@@ -1,4 +1,6 @@
-export type MetadataFieldKind = "boolean" | "numeric";
+import type { MetadataKind } from "./metadata";
+
+export type MetadataFieldKind = MetadataKind;
 
 export interface MetadataFieldInfo {
   kind: MetadataFieldKind;
@@ -39,9 +41,10 @@ export const formatMetadataMatrixHoverValue = (
   kind: MetadataFieldKind,
   value: unknown
 ): string => {
+  if (kind === "categorical") return value == null || String(value).trim() === "" ? "Missing" : String(value);
   if (kind === "numeric") {
     const numeric = parseNumericMetadataValue(value);
-    return numeric === null ? "0.0" : numeric.toFixed(4);
+    return numeric === null ? "Missing" : numeric.toFixed(4);
   }
   return TRUE_VALUES.has(normalizeMetadataValue(value)) ? "true" : "false";
 };

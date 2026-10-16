@@ -61,6 +61,7 @@ let onNextStrainReceipt: (receivedData: NextStrainData["data"]) => void = (
 };
 
 let searchSetters: Record<string, (data: SearchResult) => void> = {};
+let densityRequestId = 0;
 let metadataDensitySetters: Record<
   string,
   (data: MetadataDensityResponse) => void
@@ -215,7 +216,7 @@ function useLocalBackend(
     onConfigReceipt = (receivedData) => {
       setResult(receivedData);
     };
-  }, []);
+  }, [uploaded_data]);
 
   const getTipAtts = useCallback(
     (
@@ -247,7 +248,7 @@ function useLocalBackend(
       args: MetadataDensityRequest,
       callback: (res: MetadataDensityResponse) => void
     ) => {
-      const key = JSON.stringify(args);
+      const key = String(++densityRequestId);
       worker.postMessage({
         type: "metadata_density",
         key,
@@ -259,7 +260,7 @@ function useLocalBackend(
         delete metadataDensitySetters[key];
       };
     },
-    []
+    [uploaded_data]
   );
 
   const queryVisibleTipCount = useCallback(
@@ -270,7 +271,7 @@ function useLocalBackend(
       },
       callback: (res: VisibleTipCountResponse) => void
     ) => {
-      const key = JSON.stringify(args);
+      const key = String(++densityRequestId);
       worker.postMessage({
         type: "visible_tip_count",
         key,

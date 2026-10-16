@@ -9,11 +9,11 @@ Do not automatically begin Next Task or other backlog items.
 # Current Status
 
 **Phase:** Metadata infrastructure  
-**Status:** Not started — repository implementation needs verification.
+**Status:** META-01 complete — validated; META-02 awaits planning.
 
-The initial priority is to establish explicit metadata types and consistent colour assignment for categorical metadata.
+Uploaded datasets now have shared metadata types, continuous numeric scales and stable categorical colours across the tree, matrix, legend and SVG export.
 
-No implementation changes have yet been recorded in this plan.
+META-01 implementation and validation are complete. Type checking, all 26 tests, component and website builds, and browser smoke checks pass. No new dependencies were added.
 
 # Current Task
 
@@ -23,7 +23,12 @@ Allow each metadata column to be treated as numeric or categorical, with user-se
 
 ### Checklist
 
-TODO: To be filled by the agent planning the task, before it begins
+- [x] Add shared dataset metadata summaries, types and URL-backed overrides.
+- [x] Unify numeric and categorical colours across tree, matrix and legend.
+- [x] Add type controls and field-specific reshuffling.
+- [x] Update worker density, hover and export paths.
+- [x] Add regression tests and run type checking, tests and builds.
+- [x] Verify uploaded datasets interactively and record final handoff.
 
 ### Design constraints
 
@@ -42,7 +47,7 @@ Implement a metadata table in a resizable or otherwise appropriately sized panel
 
 The table should display the currently available samples and metadata columns, and respond to sample selection.
 
-Do not begin until META-01 is complete or explicitly reprioritised.
+META-01 is complete. Next session: plan META-02 using the shared metadata controller and existing selection state. Do not begin implementation automatically.
 
 ---
 
@@ -203,6 +208,26 @@ Requirements:
 - Preserve the correct category-to-colour mapping.
 - Avoid obscuring the main tree visualisation unnecessarily.
 
+### META-04 — Further metadata tweaks
+
+**Dependency:** META-01.
+
+Improve the metadata interaction experience for the user.
+
+Requirements:
+
+- When zooming with the controls, the display moves to the top left corner, so the tree
+  disappears without panning. The zoom should centre on the current
+  position.
+- Remove the 'replace custom colours' disclaimer text throughout, as
+  custom colours are no longer supported.
+- Add a hover tooltip over the metadata bars, which displays the label
+  associated with the hovered colour.
+- Create a drop-down box for the metadata matrix controls, including the
+  width, colours and order, so the user can hide the controls.
+- Make the height of the boxes for the colour categories match the size
+  of the colour by selection box.
+
 ---
 
 # Visualisation Improvements
@@ -292,24 +317,24 @@ Design considerations:
 
 A task is complete when:
 
-- [ ] The Current Task checklist is complete.
-- [ ] The feature works as specified.
-- [ ] Existing relevant functionality remains intact.
-- [ ] Relevant type checks have been run and pass, or outstanding errors are explicitly documented.
-- [ ] Relevant builds succeed.
-- [ ] Existing and newly added tests pass.
-- [ ] Interactive behaviour has been verified where appropriate.
-- [ ] Significant implementation decisions are recorded in Design Notes.
-- [ ] Blockers and unresolved issues are recorded.
-- [ ] Current Status accurately reflects the repository.
-- [ ] Session Log records the work performed and validation results.
-- [ ] Next Task provides a clear handoff.
+- [x] The Current Task checklist is complete.
+- [x] The feature works as specified.
+- [x] Existing relevant functionality remains intact.
+- [x] Relevant type checks have been run and pass, or outstanding errors are explicitly documented.
+- [x] Relevant builds succeed.
+- [x] Existing and newly added tests pass.
+- [x] Interactive behaviour has been verified where appropriate.
+- [x] Significant implementation decisions are recorded in Design Notes.
+- [x] Blockers and unresolved issues are recorded.
+- [x] Current Status accurately reflects the repository.
+- [x] Session Log records the work performed and validation results.
+- [x] Next Task provides a clear handoff.
 
 ## Project
 
 The project is complete when:
 
-- [ ] Metadata typing and categorical colour management are implemented.
+- [x] Metadata typing and categorical colour management are implemented.
 - [ ] Metadata table is implemented.
 - [ ] Metadata legend supports large numbers of categories.
 - [ ] Rotated tree and metadata layout is implemented.
@@ -322,6 +347,36 @@ The project is complete when:
 ---
 
 # Design Notes
+
+## 2026-10-16 — META-01 approved implementation
+
+**Related task:** META-01
+
+**Decision:** Uploaded datasets receive shared field types and colour mappings. Auto preserves boolean displays and configured types; string identifiers remain categorical. Numeric scales use finite dataset-wide ranges unless a ramp is configured. URL state stores types, seeds and manual colours. Reshuffle replaces all colours for its field, including configured colours. Dense categorical rows show the mode, with lexical ties; numeric rows average valid raw numbers.
+
+**Consequences:** Numeric matrix colours, missing-value means and unconfigured numeric-string inference intentionally change. External server APIs remain unchanged and legacy server behaviour is retained. META-02 and META-03 are not included.
+
+## 2026-10-16 — Shared metadata implementation and compatibility
+
+**Related task:** META-01
+
+**Context:** Tree colours used a global value-only cache, while matrix colours and numeric density used separate 0–1 logic. Numeric strings were inferred as numbers, including identifiers.
+
+**Decision:** `useMetadata` owns interpretation and colour settings via the optional `metadata` JSON query parameter. Entries are keyed by field and contain optional `type`, `seed` and `colors`. Existing `color` and `metadataMatrix` query parameters retain their roles. The worker supplies dataset-wide `metadataSummaries`; `metadataFields` now represents explicit configured types. Raw node values are never rewritten. Numeric ranges include finite, strictly parsed values across all tips so an explicit numeric override works for TSV columns.
+
+**Rationale:** A shared worker-compatible colour resolver gives tree points, matrix cells, density rows, legends and exports the same mapping without copying sample metadata. Generated categorical colours depend on field, exact value and seed (default zero), not category order or visibility. Per-resolver colour caches are bounded to 10,000 values. Numeric prefix indexes remain lazy; categorical density uses row-local counts with lexical tie-breaking rather than per-category full-dataset indexes.
+
+**Consequences:** Auto keeps configured types and boolean compatibility, but otherwise string values remain categorical. Explicit Numeric uses the configured ramp or a fixed full-dataset linear plasma range; constant fields use the midpoint. Missing/invalid numeric values use neutral grey and are excluded from density means. Reshuffle replaces manual/configured category colours only for that field; later manual edits apply to the new palette. Auto boolean matrix styling remains a compatibility exception. Server datasets retain legacy rendering and do not expose the new type controls; no server endpoint or protocol was added. URL state saves display settings, not uploaded files, so files must be supplied again after reload. Categorical legend expansion remains META-03.
+
+## 2026-10-16 — Worker correctness and export dependencies
+
+**Related task:** META-01
+
+**Context:** Browser validation found that the existing initial full-tree query passed null bounds to a worker that dereferenced them. SVG export omitted metadata layers. Density callbacks were keyed only by request contents.
+
+**Decision:** Treat null query bounds as an unbounded query. Match the worker's tip predicate to the renderer, excluding explicitly non-tip unary nodes. Reuse boolean parsing, refresh configuration on dataset replacement, give density requests unique callback IDs, and reject resolved density data from a different dataset or settings. Include metadata polygons and density images in SVG exports using the same layer colours and aligned Y coordinates.
+
+**Consequences:** These are direct META-01 correctness dependencies. Tree topology, search/selection semantics and external server APIs are unchanged. Existing tests asserting zero-filled numeric means and missing hover values were updated to assert the approved new behaviour; legacy inference/normalization tests remain.
 
 Record architectural decisions that future sessions need to understand.
 
@@ -358,28 +413,36 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 
 # Session Log
 
-Keep entries concise and focused on completed work, validation, and handoff information.
+## 2026-10-16
 
-## YYYY-MM-DD
-
-**Task:** `TASK-ID`
+**Task:** META-01 — complete
 
 **Completed:**
-- ...
+- Updated this plan before implementation and at completion; completed only META-01 and its direct dependencies.
+- Added shared metadata summaries, Auto/Numeric/Categorical controls, URL-backed type/palette/manual-colour settings and per-field reshuffling.
+- Unified numeric and categorical colours across tree, matrix, legend, hover and SVG export; implemented categorical density and valid-value numeric means.
+- Fixed the pre-existing null-bounds worker error encountered during browser validation and protected density results against stale settings/datasets.
 
 **Files/components changed:**
-- ...
+- Metadata controller and shared colour utilities; existing matrix, colour, local-worker and layer hooks.
+- Search-panel controls, legends, hover values, SVG export and associated types.
+- Regression tests and this plan. No dependency or website source changes; the pre-existing parent `package-lock.json` remains untouched.
 
 **Validation:**
-- ...
+- Planning baseline: `npm run check-types` and 10 tests passed.
+- Final `npm run check-types`: passed, zero TypeScript errors.
+- Final `npm test -- --run`: 26 tests across six files passed, including actual worker message handling, shared hook/control behaviour, URL parsing, numeric ranges, category stability, density, legends, legacy genotype colours and SVG colours.
+- Initial default-heap component build failed with Node heap exhaustion. `NODE_OPTIONS=--max-old-space-size=16384 npm run build`: passed (final build about 26 seconds). Third-party vm-browserify/loaders.gl warnings and the existing mixed-export configuration warning remain.
+- Website `NODE_OPTIONS=--max-old-space-size=16384 npm run build`: passed (about 7 seconds); bundle-size warnings remain.
+- Headless Chrome against the website: Newick plus TSV upload; exact rendered tree/matrix RGB agreement; boolean Auto; type switches; reshuffle; reload/re-upload restoring settings and colours; search highlighting; SVG download; 1,500-tip/40-category worker density and zoom. All passed, zero page errors.
+- Existing server protocol smoke-tested with a local HTTP mock; legacy rendering works and uploaded-dataset type controls remain hidden. Live external servers were not contacted.
+- `git diff --check`: passed. Browser validation script and screenshots were written under `/private/tmp/meta01-*` as temporary evidence.
 
-**Decisions:**
-- ...
+**Decisions:** See the dated Design Notes above. Defaults, missing-value handling and intentional numeric behaviour changes follow the approved plan.
 
-**Remaining issues:**
-- ...
+**Remaining issues:** No META-01 blockers. Categorical legend expansion is deferred to META-03 as planned. Million-tip performance was not benchmarked in this task.
 
-**Next:** ...
+**Next:** Plan META-02 (metadata table), first establishing how its rows should follow existing sample selection. Do not automatically implement it.
 
 ---
 

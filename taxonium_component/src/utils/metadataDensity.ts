@@ -1,7 +1,4 @@
-import {
-  normalizeNumericValue,
-  parseNumericMetadataValue,
-} from "./metadataMatrix";
+import { numericMetadataValue } from "./metadata";
 
 export interface NumericPrefixValues {
   sums: Float64Array;
@@ -14,10 +11,10 @@ export const buildNumericPrefixValues = (
   const sums = new Float64Array(values.length + 1);
   const counts = new Uint32Array(values.length + 1);
   values.forEach((value, index) => {
-    const numeric = parseNumericMetadataValue(value);
+    const numeric = numericMetadataValue(value);
     sums[index + 1] =
-      sums[index] + normalizeNumericValue(numeric);
-    counts[index + 1] = counts[index] + 1;
+      sums[index] + (numeric ?? 0);
+    counts[index + 1] = counts[index] + (numeric === null ? 0 : 1);
   });
   return { sums, counts };
 };

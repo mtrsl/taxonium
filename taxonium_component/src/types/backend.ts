@@ -1,3 +1,4 @@
+import type { MetadataSummary, MetadataColorSpec } from "../utils/metadata";
 import type { Node, Mutation } from "./node";
 import type React from "react";
 import type { ColorRamps } from "./common";
@@ -48,6 +49,7 @@ export interface Config {
   colorBy?: {
     colorByOptions: string[];
   };
+  metadataSummaries?: Record<string, MetadataSummary>;
   metadataFields?: Record<string, MetadataFieldInfo>;
   search_types?: SearchType[];
   overlay?: React.ReactNode;
@@ -103,7 +105,7 @@ export interface DynamicDataWithLookup {
 }
 
 export interface MetadataDensityField {
-  kind?: "boolean" | "numeric";
+  kind?: "boolean" | "numeric" | "categorical";
   trueCounts?: Uint32Array | number[];
   totalCounts: Uint32Array | number[];
   valueSums?: Float64Array | number[];
@@ -135,8 +137,9 @@ export interface MetadataDensityRequest {
   columnWidth: number;
   fields: Array<{
     field: string;
-    kind: "boolean" | "numeric";
+    kind: "boolean" | "numeric" | "categorical";
     color: [number, number, number];
+    colorSpec?: MetadataColorSpec;
     min?: number;
     max?: number;
   }>;

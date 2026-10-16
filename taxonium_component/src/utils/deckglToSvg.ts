@@ -5,7 +5,8 @@ import type { ViewState } from "../types/view";
 
 const getSVGfunction = (
   layers: any[],
-  viewState: ViewState
+  viewState: ViewState,
+  metadataLayout?: { treeWidth: number; matrixWidth: number }
 ): { triggerSVGdownload: (deckSize?: DeckSize) => void } => {
   const accessOrConstant = <T, R>(accessor: ((node: T) => R) | R, node: T): R => {
     if (typeof accessor === "function") {
@@ -32,12 +33,38 @@ const getSVGfunction = (
       const initial = point;
       const x = normalise(initial[0], minX, maxX);
       const y = normalise(initial[1], minY, maxY);
-      return [x * svgWidth, y * svgHeight];
+      return [x * (metadataLayout?.treeWidth ?? svgWidth), y * svgHeight];
     };
   
     let svgContent = `<svg xmlns='http://www.w3.org/2000/svg' width="${svgWidth}" height="${svgHeight}">`;
 
+    if (metadataLayout) svgContent += `<defs><clipPath id="metadata-clip"><rect x="${metadataLayout.treeWidth}" y="0" width="${metadataLayout.matrixWidth}" height="${svgHeight}" /></clipPath></defs>`;
+
     for (const layer of layers) {
+      if (metadataLayout && layer.id.startsWith("metadata-matrix-")) {
+        const matrixPoint = ([x, y]: [number, number]) =>
+          [metadataLayout.treeWidth + x, applyBounds([0, y])[1]];
+        const css = (color: number[]) => `rgba(${color.slice(0, 3).join(",")},${(color[3] ?? 255) / 255})`;
+        // Clip the matrix to its viewport, just as Deck does on screen.
+        svgContent += `<g clip-path="url(#metadata-clip)">`;
+        if (layer.layerType === "PolygonLayer") {
+          for (const cell of layer.data) {
+            const points = layer.getPolygon(cell).map(matrixPoint).map((p: number[]) => p.join(",")).join(" ");
+            const fill = css(accessOrConstant(layer.getFillColor, cell));
+            const stroke = layer.stroked ? css(accessOrConstant(layer.getLineColor, cell)) : "none";
+            const width = layer.stroked ? accessOrConstant(layer.getLineWidth, cell) : 0;
+            svgContent += `<polygon points="${points}" fill="${fill}" stroke="${stroke}" stroke-width="${width}" />`;
+          }
+        } else if (layer.layerType === "BitmapLayer" && layer.image) {
+          const [x0, y0, x1, y1] = layer.bounds;
+          const top = matrixPoint([x0, Math.min(y0, y1)]);
+          const height = Math.abs(matrixPoint([0, y1])[1] - matrixPoint([0, y0])[1]);
+          // Worker bitmaps run from maximum to minimum Y; SVG Y runs downwards.
+          svgContent += `<image x="${top[0]}" y="${top[1]}" width="${x1 - x0}" height="${height}" preserveAspectRatio="none" transform="translate(0 ${2 * top[1] + height}) scale(1 -1)" href="${layer.image.toDataURL()}" />`;
+        }
+        svgContent += "</g>";
+        continue;
+      }
       // unless layer id starts with "main"
       if (!layer.id.startsWith("main")) {
         continue;
@@ -155,9 +182,9 @@ const getSVGfunction = (
     if (!deckSize) {
       deckSize = { width: 600, height: 600 };
     }
-    const svgWidth = deckSize.width;
+    const svgWidth = metadataLayout ? metadataLayout.treeWidth + metadataLayout.matrixWidth : deckSize.width;
     const svgHeight = deckSize.height;
-    const viewStateWithBounds = computeBounds({ ...viewState }, deckSize);
+    const viewStateWithBounds = computeBounds({ ...viewState }, { ...deckSize, width: metadataLayout?.treeWidth ?? deckSize.width });
     const svgContent = getSVG(layers, viewStateWithBounds, svgWidth, svgHeight);
     if (!svgContent) {
       return;

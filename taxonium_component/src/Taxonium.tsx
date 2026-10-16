@@ -1,3 +1,4 @@
+import useMetadata from "./hooks/useMetadata";
 import React, { useMemo, useState, useRef } from "react";
 import "./App.css";
 import Deck from "./Deck";
@@ -193,7 +194,8 @@ function Taxonium({
       : {};
     return { ...initial, ...additionalColorMapping };
   }, [(config as any).colorMapping, additionalColorMapping]);
-  const colorHook = useColor(config, colorMapping, colorBy.colorByField);
+  const metadata = useMetadata(config, query, updateQuery, backend.type === "local");
+  const colorHook = useColor(config, colorMapping, colorBy.colorByField, metadata.colors[colorBy.colorByField]);
 
   //TODO: this is always true for now
   (config as any).enable_ns_download = true;
@@ -219,6 +221,7 @@ function Taxonium({
     );
 
   const metadataMatrix = useMetadataMatrix({
+    metadata,
     query,
     updateQuery,
     config,

@@ -55,7 +55,7 @@ const MetadataMatrixHoverValues = ({
               display: "flex",
               justifyContent: "center",
               alignItems: "flex-end",
-              color: `rgb(${darkenMetadataColor(field.color).join(", ")})`,
+              color: `rgb(${darkenMetadataColor(metadataMatrix.getValueColor(field, hoverInfo.object[field.field]) ?? field.color).join(", ")})`,
               fontSize: "10px",
               fontWeight: 700,
             }}

@@ -17,6 +17,8 @@ export interface Query {
   color?: string;
   /** JSON string describing metadata matrix state */
   metadataMatrix?: string;
+  /** Per-field metadata types, palette seeds and manual colours. */
+  metadata?: string;
   /** JSON string containing config overrides */
   config?: string;
   /** URL to fetch config from */

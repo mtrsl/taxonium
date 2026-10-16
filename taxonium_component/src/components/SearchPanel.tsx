@@ -1,3 +1,4 @@
+import MetadataTypeControl from "./MetadataTypeControl";
 import SearchTopLayerItem from "./SearchTopLayerItem";
 import { RiAddCircleLine, RiArrowLeftUpLine } from "react-icons/ri";
 import { BiPalette } from "react-icons/bi";
@@ -419,6 +420,7 @@ function SearchPanel({
               ))}
           </Select>
         </div>
+        <MetadataTypeControl field={colorBy.colorByField} metadata={metadataMatrix.metadata} />
         {colorBy.colorByField === "genotype" && (
           <div className="space-x-2">
             <label className="space-x-2">
@@ -485,21 +487,22 @@ function SearchPanel({
           )}
           {metadataMatrix.availableFields.length === 0 ? (
             <p className="text-xs text-gray-500">
-              No boolean or numerical metadata columns detected.
+              No metadata columns detected.
             </p>
           ) : (
             <>
-              <div className="max-h-32 overflow-y-auto space-y-1 border border-gray-200 rounded-sm p-2">
+              <div className="max-h-64 overflow-y-auto space-y-2 border border-gray-200 rounded-sm p-2">
                 {metadataMatrix.availableFields.map((field) => {
                   const label = prettifyName(field, config);
                   return (
                     <div
                       key={field}
-                      className="flex items-center justify-between gap-2 text-xs text-gray-700"
+                      className="flex flex-col items-start gap-1 text-xs text-gray-700 border-b border-gray-100 pb-2"
                     >
-                      <label className="flex items-center gap-2 min-w-0 flex-1">
+                      <label className="flex items-center gap-2 min-w-0 w-full">
                         <input
                           type="checkbox"
+                          aria-label={`Show ${label} in metadata matrix`}
                           checked={metadataMatrix.selectedFields.includes(field)}
                           onChange={() => metadataMatrix.toggleField(field)}
                         />
@@ -510,16 +513,13 @@ function SearchPanel({
                           </span>
                         )}
                       </label>
-                      {metadataMatrix.fieldInfo[field]?.kind === "numeric" && (
-                        <span className="text-[10px] text-gray-400 shrink-0">
-                          0–1
-                        </span>
-                      )}
-                      <ColorSwatchPicker
+                      <MetadataTypeControl field={field} metadata={metadataMatrix.metadata} />
+                      {(metadataMatrix.fieldInfo[field]?.kind === "boolean" || !metadataMatrix.metadata?.specs[field]) && <ColorSwatchPicker
                         color={metadataMatrix.getFieldColor(field)}
                         setColor={(color) => metadataMatrix.setFieldColor(field, color)}
                         title={`Edit colour for ${label}`}
-                      />
+                      />}
+
                     </div>
                   );
                 })}

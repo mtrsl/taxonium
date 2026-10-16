@@ -1,3 +1,4 @@
+import type { MetadataController } from "./useMetadata";
 import { useMemo, useCallback } from "react";
 import prettifyName from "../utils/prettifyName";
 import type { Query } from "../types/query";
@@ -121,6 +122,7 @@ interface UseMetadataMatrixProps {
   updateQuery: (q: Partial<Query>) => void;
   config: Config;
   data: DynamicData;
+  metadata?: MetadataController;
 }
 
 const useMetadataMatrix = ({
@@ -128,6 +130,7 @@ const useMetadataMatrix = ({
   updateQuery,
   config,
   data,
+  metadata,
 }: UseMetadataMatrixProps): MetadataMatrix => {
   const metadataMatrixConfig = useMemo(
     () => sanitizeConfig(query.metadataMatrix as string | undefined),
@@ -139,6 +142,7 @@ const useMetadataMatrix = ({
     : data.data?.nodes ?? [];
 
   const availableFields = useMemo(() => {
+    if (metadata && Object.keys(metadata.specs).length) return Object.keys(metadata.specs).sort((a, b) => prettifyName(a, config).localeCompare(prettifyName(b, config)));
     const fieldCandidates = new Set<string>();
     const colorOptions = config.colorBy?.colorByOptions ?? [];
 
@@ -165,12 +169,12 @@ const useMetadataMatrix = ({
         return classifyMetadataValues(sampleNodes.map((node) => node[field])) !== null;
       })
       .sort((a, b) => prettifyName(a, config).localeCompare(prettifyName(b, config)));
-  }, [config, nodes]);
+  }, [config, nodes, metadata]);
 
   const fieldInfo = useMemo(() => {
     const info: Record<string, MetadataFieldInfo> = {};
     availableFields.forEach((field) => {
-      const configuredInfo = config.metadataFields?.[field];
+      const configuredInfo = metadata?.specs[field] ?? config.metadataFields?.[field];
       if (configuredInfo) {
         info[field] = configuredInfo;
         return;
@@ -183,7 +187,7 @@ const useMetadataMatrix = ({
       }
     });
     return info;
-  }, [availableFields, config.metadataFields, nodes]);
+  }, [availableFields, config.metadataFields, nodes, metadata]);
 
   const selectedFields = useMemo(() => {
     return metadataMatrixConfig.fields.filter((field) =>
@@ -276,10 +280,11 @@ const useMetadataMatrix = ({
       label: prettifyName(field, config),
       color: getFieldColor(field),
       kind: fieldInfo[field]?.kind ?? "boolean",
-      min: 0,
-      max: 1,
+      min: metadata?.specs[field]?.min ?? 0,
+      max: metadata?.specs[field]?.max ?? 1,
+      colorSpec: metadata?.specs[field],
     }));
-  }, [config, fieldInfo, getFieldColor, selectedFields]);
+  }, [config, fieldInfo, getFieldColor, selectedFields, metadata]);
 
   const setColumnWidth = useCallback(
     (nextColumnWidth: number) => {
@@ -299,10 +304,11 @@ const useMetadataMatrix = ({
       if (field.kind === "boolean") {
         return isTruthyValue(value) ? field.color : null;
       }
+      if (metadata?.colors[field.field]) return metadata.colors[field.field](value);
       const normalizedValue = normalizeNumericValue(value);
       return interpolateMetadataColor([244, 244, 244], field.color, normalizedValue);
     },
-    [matrixFields]
+    [matrixFields, metadata]
   );
 
   const columnWidth = normalizeMetadataMatrixColumnWidth(
@@ -316,6 +322,7 @@ const useMetadataMatrix = ({
 
   return useMemo(
     () => ({
+      metadata,
       selectedFields,
       availableFields,
       fieldInfo,
@@ -335,6 +342,7 @@ const useMetadataMatrix = ({
       getValueColor,
     }),
     [
+      metadata,
       selectedFields,
       availableFields,
       fieldInfo,

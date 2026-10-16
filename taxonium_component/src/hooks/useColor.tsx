@@ -4,12 +4,12 @@ import { scaleLinear, ScaleLinear } from "d3-scale";
 import type { Config } from "../types/backend";
 import type { ColorHook } from "../types/color";
 
-const rgb_cache: Record<string, [number, number, number]> = {};
 
 const useColor = (
   config: Config,
   colorMapping: Record<string, [number, number, number]>,
-  colorByField: string
+  colorByField: string,
+  metadataColor?: (value: unknown) => [number, number, number]
 ): ColorHook => {
   const colorScales = useMemo(() => {
     const scales: { colorRamp?: ScaleLinear<string, string> } = {};
@@ -152,20 +152,18 @@ const useColor = (
     [colorMapping, config, colorByField, colorScales]
   );
 
-  const toRGB = useCallback(
-    (val: string | number): [number, number, number] => {
-      if (typeof val === "string" && rgb_cache[val] && !colorMapping[val]) {
-        return rgb_cache[val];
-      } else {
-        const result = toRGB_uncached(val);
-        if (typeof val === "string") {
-          rgb_cache[val] = result;
-        }
-        return result;
-      }
-    },
-    [toRGB_uncached, colorMapping]
-  );
+  // Cache lifetime follows the field and all colour settings, never other instances.
+  const toRGB = useMemo(() => {
+    const cache = new Map<string | number, [number, number, number]>();
+    return (value: string | number): [number, number, number] => {
+      if (metadataColor) return metadataColor(value);
+      const cached = cache.get(value);
+      if (cached) return cached;
+      const result = toRGB_uncached(value);
+      if (cache.size < 10000) cache.set(value, result);
+      return result;
+    };
+  }, [metadataColor, toRGB_uncached]);
 
   const toRGBCSS = useCallback(
     (val: string | number): string => {

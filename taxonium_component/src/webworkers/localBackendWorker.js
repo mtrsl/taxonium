@@ -1,3 +1,4 @@
+import { summarizeMetadata, createMetadataColor, categoricalMode } from "../utils/metadata";
 import filtering from "taxonium_data_handling/filtering.js";
 import { getNextstrainSubtreeJson } from "taxonium_data_handling/exporting.js";
 import {
@@ -11,9 +12,10 @@ import { parser } from "stream-json";
 import { streamValues } from "stream-json/streamers/StreamValues";
 import { Buffer } from "buffer";
 import {
-  classifyMetadataValues,
   interpolateMetadataColor,
   normalizeNumericValue,
+  normalizeMetadataValue,
+  TRUE_VALUES,
 } from "../utils/metadataMatrix";
 import { buildNumericPrefixValues } from "../utils/metadataDensity";
 
@@ -42,8 +44,6 @@ const cache_helper = {
 };
 
 let processedUploadedData;
-
-const TRUE_VALUES = new Set(["true", "1", "yes", "y", "t"]);
 
 const sendStatusMessage = (status_obj) => {
   postMessage({
@@ -90,20 +90,13 @@ const getNodesInYRange = (nodes, y_positions, minY, maxY) => {
   return nodes.slice(startIndex, endExclusive);
 };
 
-const normalizeMetadataValue = (value) => {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  return String(value).trim().toLowerCase();
-};
-
 const isTruthyMetadataValue = (value) =>
   TRUE_VALUES.has(normalizeMetadataValue(value));
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 const createMetadataDensityIndex = (nodes) => {
-  const tipNodes = nodes.filter((node) => node.num_tips === 1 || node.is_tip);
+  const tipNodes = nodes.filter((node) => node.is_tip || (node.is_tip === undefined && node.num_tips === 1));
   const fieldNames = new Set();
   tipNodes.forEach((node) => {
     Object.keys(node).forEach((field) => {
@@ -114,10 +107,8 @@ const createMetadataDensityIndex = (nodes) => {
   });
   const fieldInfo = {};
   fieldNames.forEach((field) => {
-    const info = classifyMetadataValues(tipNodes.map((node) => node[field]));
-    if (info) {
-      fieldInfo[field] = info;
-    }
+    function* values() { for (const node of tipNodes) yield node[field]; }
+    fieldInfo[field] = summarizeMetadata(values());
   });
   return {
     tipNodes,
@@ -161,6 +152,7 @@ const ensureFieldNumericPrefixValues = (metadataDensityIndex, field) => {
 };
 
 export const queryNodes = async (boundsForQueries) => {
+  boundsForQueries = boundsForQueries ?? {};
   await waitForProcessedData();
 
   const {
@@ -258,9 +250,9 @@ const getConfig = async () => {
 
   const merged_config = {
     ...config,
-    metadataFields:
-      processedUploadedData.metadataDensityIndex?.fieldInfo ?? {},
+    metadataFields: {},
     ...processedUploadedData.overwrite_config,
+    metadataSummaries: processedUploadedData.metadataDensityIndex?.fieldInfo ?? {},
   };
 
 
@@ -349,6 +341,7 @@ const getMetadataDensity = async ({
   fields.forEach(({ field, kind: requestedKind }) => {
     const fieldInfo = metadataDensityIndex.fieldInfo[field];
     const kind = requestedKind ?? fieldInfo?.kind ?? "boolean";
+    const categoryValues = kind === "categorical" ? new Array(height).fill(null) : undefined;
     const trueCounts = kind === "boolean" ? new Uint32Array(height) : undefined;
     const totalCounts = new Uint32Array(height);
     const valueSums = kind === "numeric" ? new Float64Array(height) : undefined;
@@ -366,14 +359,18 @@ const getMetadataDensity = async ({
     for (let rowIndex = 0; rowIndex < height; rowIndex++) {
       const startTipIndex = rowLowerBounds[rowIndex];
       const endTipExclusive = rowUpperBounds[rowIndex];
-      if (kind === "numeric" && prefixNumericValues) {
+      if (categoryValues) {
+        function* values() { for (let i = startTipIndex; i < endTipExclusive; i++) yield metadataDensityIndex.tipNodes[i][field]; }
+        categoryValues[rowIndex] = categoricalMode(values());
+        totalCounts[rowIndex] = endTipExclusive - startTipIndex;
+      } else if (kind === "numeric" && prefixNumericValues) {
         valueSums[rowIndex] =
           prefixNumericValues.sums[endTipExclusive] -
           prefixNumericValues.sums[startTipIndex];
         valueCounts[rowIndex] =
           prefixNumericValues.counts[endTipExclusive] -
           prefixNumericValues.counts[startTipIndex];
-        totalCounts[rowIndex] = valueCounts[rowIndex];
+        totalCounts[rowIndex] = endTipExclusive - startTipIndex;
       } else if (prefixTrueCounts && trueCounts) {
         totalCounts[rowIndex] = endTipExclusive - startTipIndex;
         trueCounts[rowIndex] =
@@ -387,6 +384,7 @@ const getMetadataDensity = async ({
       totalCounts,
       valueSums,
       valueCounts,
+      categoryValues,
     };
   });
 
@@ -403,12 +401,13 @@ const getMetadataDensity = async ({
       return;
     }
     const fieldResult = fieldResults[field];
-    const { trueCounts, totalCounts, valueSums, valueCounts } = fieldResult;
+    const { trueCounts, totalCounts, valueSums, valueCounts, categoryValues } = fieldResult;
     const fieldConfig = fields[fieldIndex];
     const fieldInfo = metadataDensityIndex.fieldInfo[field];
     const kind = fieldConfig.kind ?? fieldInfo?.kind ?? "boolean";
+    const valueColor = fieldConfig.colorSpec ? createMetadataColor(fieldConfig.colorSpec) : null;
     const sourceHeight = Math.min(
-      kind === "numeric" ? valueSums.length : trueCounts.length,
+      kind === "categorical" ? categoryValues.length : kind === "numeric" ? valueSums.length : trueCounts.length,
       totalCounts.length
     );
 
@@ -425,6 +424,10 @@ const getMetadataDensity = async ({
       let fillColor;
       if (totalCount === 0) {
         fillColor = [0, 0, 0, 0];
+      } else if (kind === "categorical" && valueColor) {
+        fillColor = [...valueColor(categoryValues[sourceRow]), 255];
+      } else if (kind === "numeric" && valueColor) {
+        fillColor = [...valueColor(valueCounts[sourceRow] ? valueSums[sourceRow] / valueCounts[sourceRow] : null), 255];
       } else if (kind === "numeric" && valueSums && valueCounts) {
         const mean = valueSums[sourceRow] / valueCounts[sourceRow];
         const clampedFraction = normalizeNumericValue(mean);
@@ -491,6 +494,7 @@ const getVisibleTipCount = async ({ minY, maxY }) => {
 onmessage = async (event) => {
   //Process uploaded data:
   const { data } = event;
+  if (data.type === "upload" && data.data?.filename) processedUploadedData = undefined;
   if (
     data.type === "upload" &&
     data.data &&

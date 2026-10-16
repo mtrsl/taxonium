@@ -1,3 +1,4 @@
+import { isMissingMetadata } from "../utils/metadata";
 import {
   BitmapLayer,
   LineLayer,
@@ -401,26 +402,19 @@ const getKeyStuff = (
   colorByField: string,
   dataset: NodeLookupData,
   toRGB: (value: string | number) => [number, number, number],
+  sharedMetadata = false,
 ) => {
-  const counts: Record<string, number> = {};
+  const missingKey = Symbol("missing");
+  const counts = new Map<string | symbol, { value: string; count: number; color: [number, number, number]; missing?: boolean }>();
   for (const node of dataset.nodes) {
     const value = getNodeColorField(node, dataset);
-    const key = String(value);
-    if (key in counts) {
-      counts[key]++;
-    } else {
-      counts[key] = 1;
-    }
+    const missing = sharedMetadata && isMissingMetadata(value);
+    const key = missing ? missingKey : String(value);
+    const entry = counts.get(key);
+    if (entry) entry.count++;
+    else counts.set(key, { value: missing ? "Missing" : String(value), count: 1, color: toRGB(value), missing });
   }
-  const keys = Object.keys(counts);
-  const output: Array<{
-    value: string;
-    count: number;
-    color: [number, number, number];
-  }> = [];
-  for (const key of keys) {
-    output.push({ value: key, count: counts[key], color: toRGB(key) });
-  }
+  const output = Array.from(counts.values());
   return output;
 };
 
@@ -508,8 +502,8 @@ const useLayers = ({
   }, [data.data, getX]);
 
   const keyStuff = useMemo(() => {
-    return getKeyStuff(getNodeColorField, colorByField, detailed_data, toRGB);
-  }, [detailed_data, getNodeColorField, colorByField, toRGB]);
+    return getKeyStuff(getNodeColorField, colorByField, detailed_data, toRGB, !!metadataMatrix.metadata?.specs[colorByField]);
+  }, [detailed_data, getNodeColorField, colorByField, toRGB, metadataMatrix.metadata]);
 
   const clade_accessor = "pango";
 
@@ -963,6 +957,7 @@ const useLayers = ({
         field: field.field,
         kind: field.kind,
         color: field.color,
+        colorSpec: field.colorSpec,
       })),
     } satisfies MetadataDensityRequest;
   }, [
@@ -984,10 +979,12 @@ const useLayers = ({
   const [metadataDensityData, setMetadataDensityData] = useState<{
     key: string;
     data: MetadataDensityResponse;
+    dataset: Config;
   } | null>(null);
   const [resolvedMetadataDensityData, setResolvedMetadataDensityData] = useState<{
     key: string;
     data: MetadataDensityResponse;
+    dataset: Config;
     spanY: number;
   } | null>(null);
   const densityCanvasCacheRef = useRef<DensityCanvasCache | null>(null);
@@ -1006,6 +1003,7 @@ const useLayers = ({
       if (!cancelled) {
         const resolved = {
           key: metadataDensityRequestKey,
+          dataset: config,
           data: result,
           spanY: densitySpanY,
         };
@@ -1017,7 +1015,7 @@ const useLayers = ({
     return () => {
       cancelled = true;
     };
-  }, [backend, metadataDensityRequest, metadataDensityRequestKey]);
+  }, [backend, config, metadataDensityRequest, metadataDensityRequestKey]);
 
   const sortedVisibleTipNodesForMatrix = useMemo(
     () =>
@@ -1050,7 +1048,7 @@ const useLayers = ({
                   ? normalizeNumericValue(node[field.field])
                   : undefined,
               color:
-                field.kind === "numeric"
+                field.kind !== "boolean"
                   ? metadataMatrix.getValueColor(field, node[field.field]) ??
                     field.color
                   : field.color,
@@ -1068,8 +1066,8 @@ const useLayers = ({
 
   const densityPayload =
     backend.type === "local"
-      ? resolvedMetadataDensityData?.data ?? null
-      : metadataDensityData &&
+      ? resolvedMetadataDensityData?.dataset === config && resolvedMetadataDensityData.key === metadataDensityRequestKey ? resolvedMetadataDensityData.data : null
+      : metadataDensityData && metadataDensityData.dataset === config &&
           metadataDensityRequestKey &&
           metadataDensityData.key === metadataDensityRequestKey &&
           metadataDensityData.data.minY === densityMinY &&
@@ -1208,7 +1206,7 @@ const useLayers = ({
           [d.x - halfWidth, d.y + halfHeight],
         ],
         getFillColor: (d: MetadataMatrixCell) =>
-          d.kind === "numeric"
+          d.kind !== "boolean"
             ? [...d.color, 255]
             : d.isTrue
               ? [...d.color, 255]
@@ -1264,7 +1262,7 @@ const useLayers = ({
           [d.x - halfWidth, d.y + halfHeight],
         ],
         getFillColor: (d: MetadataMatrixCell) =>
-          d.kind === "numeric"
+          d.kind !== "boolean"
             ? [...d.color, 245]
             : d.isTrue
               ? [...d.color, 245]
@@ -1548,6 +1546,7 @@ const useLayers = ({
   const { triggerSVGdownload } = getSVGfunction(
     layers.filter((x) => x !== null),
     viewState,
+    metadataMatrix.isEnabled && deckSize ? { treeWidth: deckSize.width, matrixWidth: metadataMatrix.panelWidth } : undefined,
   );
 
   return {

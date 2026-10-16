@@ -1,3 +1,4 @@
+import { MISSING_COLOR } from "../utils/metadata";
 import prettifyName from "../utils/prettifyName";
 import { useState } from "react";
 import classNames from "classnames";
@@ -5,6 +6,7 @@ import type { ColorRamp, ColorRamps } from "../types/common";
 
 export interface KeyItem {
   value: string;
+  missing?: boolean;
   count: number;
   color: [number, number, number];
 }
@@ -20,6 +22,7 @@ interface KeyProps {
   hoveredKey: string | null;
   setHoveredKey: (key: string | null) => void;
   colorRamps?: ColorRamps;
+  numericEmpty?: boolean;
 }
 
 interface KeyContentProps {
@@ -42,7 +45,7 @@ const ColorRamp = ({ ramp }: { ramp: ColorRamp }) => {
   // Build the gradient string
   const colorStops = scale
     .map(([value, color]) => {
-      const position = ((value - min) / (max - min)) * 100;
+      const position = max === min ? 50 : ((value - min) / (max - min)) * 100;
       return `${color} ${position}%`;
     })
     .join(", ");
@@ -50,7 +53,7 @@ const ColorRamp = ({ ramp }: { ramp: ColorRamp }) => {
   const height = 100;
 
   const gradientStyle = {
-    background: `linear-gradient(to top, ${colorStops})`,
+    background: max === min ? scale[0][1] : `linear-gradient(to top, ${colorStops})`,
     width: "20px",
     height: `${height + 2}px`,
     border: "1px solid #ccc",
@@ -58,11 +61,11 @@ const ColorRamp = ({ ramp }: { ramp: ColorRamp }) => {
   };
 
   // Create evenly spaced labels
-  const numLabels = 5; // Adjust the number of labels as needed
+  const numLabels = max === min ? 1 : 5; // Adjust the number of labels as needed
   const labels = [];
   for (let i = 0; i < numLabels; i++) {
-    const value = min + (i / (numLabels - 1)) * (max - min);
-    const position = ((value - min) / (max - min)) * 100;
+    const value = numLabels === 1 ? min : min + (i / (numLabels - 1)) * (max - min);
+    const position = max === min ? 50 : ((value - min) / (max - min)) * 100;
     labels.push({ value, position });
   }
 
@@ -129,12 +132,13 @@ const Key = ({
   hoveredKey,
   setHoveredKey,
   colorRamps,
+  numericEmpty,
 }: KeyProps) => {
   const numLegendEntries = 10;
   const [collapsed, setCollapsed] = useState(window.innerWidth < 800);
 
   // sort by item.count in descending order
-  const sortedKeyStuff = keyStuff.sort((a, b) => b.count - a.count);
+  const sortedKeyStuff = [...keyStuff].sort((a, b) => b.count - a.count);
 
   // truncate to 10 items
   const isTruncated = sortedKeyStuff.length > numLegendEntries;
@@ -147,7 +151,7 @@ const Key = ({
     return null;
   }
 
-  if (!filteredKeyStuff || filteredKeyStuff.length == 0) {
+  if (filteredKeyStuff.length === 0 && !numericEmpty && !colorRamps?.[colorByField]) {
     return null;
   }
 
@@ -178,8 +182,10 @@ const Key = ({
       </h3>
 
       {!collapsed &&
-        (colorRamps && colorByField in colorRamps ? (
-          <ColorRamp ramp={colorRamps[colorByField]} />
+        (numericEmpty ? <div className="text-xs">No valid numeric values</div> : colorRamps?.[colorByField] ? (
+          <div><ColorRamp ramp={colorRamps[colorByField]} />
+            {keyStuff.some(item => item.missing) && <div className="text-xs mt-2"><span className="circle w-2 h-2 mr-2 inline-block" style={{ background: `rgb(${MISSING_COLOR.join(",")})` }} />Missing</div>}
+          </div>
         ) : (
           <KeyContent
             filteredKeyStuff={filteredKeyStuff}
@@ -216,14 +222,15 @@ const KeyContent = ({
               pointerEvents: "auto",
             }}
             onClick={() => {
+              if (item.missing) return;
               setCurrentColorSettingKey(item.value);
               setColorSettingOpen(true);
             }}
             onMouseEnter={() => {
-              setHoveredKey(item.value);
+              if (!item.missing) setHoveredKey(item.value);
             }}
             onMouseLeave={() => setHoveredKey(null)}
-            title="Edit color"
+            title={item.missing ? "Missing metadata" : "Edit color"}
           >
             <div
               style={{ backgroundColor: color }}

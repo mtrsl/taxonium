@@ -1,3 +1,5 @@
+import type { MetadataColorSpec } from "../utils/metadata";
+import type { MetadataController } from "../hooks/useMetadata";
 import type { Node } from "./node";
 import type {
   MetadataFieldInfo,
@@ -18,6 +20,7 @@ export interface MetadataMatrixField {
   label: string;
   color: MetadataMatrixColor;
   kind: MetadataFieldKind;
+  colorSpec?: MetadataColorSpec;
   min?: number;
   max?: number;
 }
@@ -58,6 +61,7 @@ export interface MetadataMatrixHeader {
 }
 
 export interface MetadataMatrix {
+  metadata?: MetadataController;
   selectedFields: string[];
   availableFields: string[];
   fieldInfo: Record<string, MetadataFieldInfo>;

@@ -1,3 +1,4 @@
+import { metadataLegendRamp } from "./utils/metadata";
 /// app.js
 import React, { useState, useCallback, useRef, Suspense, useEffect } from "react";
 import DeckGL, { type DeckGLRef } from "@deck.gl/react";
@@ -338,9 +339,11 @@ function Deck({
         setIsOpen={setColorSettingOpen}
         color={colorHook.toRGB(currentColorSettingKey)}
         setColor={(color: number[]) => {
-          setAdditionalColorMapping((x: any) => {
-            return { ...x, [currentColorSettingKey]: color };
-          });
+          if (metadataMatrix.metadata?.specs[colorBy.colorByField]) {
+            metadataMatrix.metadata.setColor(colorBy.colorByField, currentColorSettingKey, color as [number, number, number]);
+          } else {
+            setAdditionalColorMapping((x: any) => ({ ...x, [currentColorSettingKey]: color }));
+          }
         }}
         title={currentColorSettingKey}
       />
@@ -372,7 +375,10 @@ function Deck({
         colorByField={colorBy.colorByField}
         colorByGene={colorBy.colorByGene}
         colorByPosition={colorBy.colorByPosition}
-        colorRamps={config.colorRamps}
+        colorRamps={metadataMatrix.metadata?.specs[colorBy.colorByField]
+          ? { [colorBy.colorByField]: metadataLegendRamp(metadataMatrix.metadata.specs[colorBy.colorByField]) } as typeof config.colorRamps
+          : config.colorRamps}
+        numericEmpty={metadataMatrix.metadata?.specs[colorBy.colorByField]?.kind === "numeric" && !metadataLegendRamp(metadataMatrix.metadata.specs[colorBy.colorByField])}
         config={config}
         setCurrentColorSettingKey={setCurrentColorSettingKey}
         setColorSettingOpen={setColorSettingOpen}

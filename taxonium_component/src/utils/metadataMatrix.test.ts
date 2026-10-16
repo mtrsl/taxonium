@@ -22,8 +22,8 @@ describe("metadata matrix field classification", () => {
   it("formats values for the lane hover readout", () => {
     expect(formatMetadataMatrixHoverValue("numeric", 1.25)).toBe("1.2500");
     expect(formatMetadataMatrixHoverValue("numeric", 0.123456)).toBe("0.1235");
-    expect(formatMetadataMatrixHoverValue("numeric", "")).toBe("0.0");
-    expect(formatMetadataMatrixHoverValue("numeric", "invalid")).toBe("0.0");
+    expect(formatMetadataMatrixHoverValue("numeric", "")).toBe("Missing");
+    expect(formatMetadataMatrixHoverValue("numeric", "invalid")).toBe("Missing");
     expect(formatMetadataMatrixHoverValue("boolean", "yes")).toBe("true");
     expect(formatMetadataMatrixHoverValue("boolean", "false")).toBe("false");
   });
@@ -67,23 +67,23 @@ describe("metadata matrix field classification", () => {
 });
 
 describe("numeric metadata density", () => {
-  it("includes zero-filled missing values in the bin mean", () => {
+  it("excludes missing values and averages raw numeric values", () => {
     const prefix = buildNumericPrefixValues([1, "", "invalid", "5", 9]);
 
     expect(summarizeNumericPrefixValues(prefix, 0, 3)).toEqual({
       sum: 1,
-      count: 3,
-      mean: 1 / 3,
+      count: 1,
+      mean: 1,
     });
     expect(summarizeNumericPrefixValues(prefix, 3, 5)).toEqual({
-      sum: 2,
+      sum: 14,
       count: 2,
-      mean: 1,
+      mean: 7,
     });
     expect(summarizeNumericPrefixValues(prefix, 1, 3)).toEqual({
       sum: 0,
-      count: 2,
-      mean: 0,
+      count: 0,
+      mean: null,
     });
   });
 
