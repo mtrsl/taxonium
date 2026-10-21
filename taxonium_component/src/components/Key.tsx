@@ -1,6 +1,8 @@
 import { MISSING_COLOR } from "../utils/metadata";
 import prettifyName from "../utils/prettifyName";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import LegendDialog, { LegendEntry, legendEntryKey } from "./LegendDialog";
+import type { Backend } from "../types/backend";
 import classNames from "classnames";
 import type { ColorRamp, ColorRamps } from "../types/common";
 
@@ -23,15 +25,7 @@ interface KeyProps {
   setHoveredKey: (key: string | null) => void;
   colorRamps?: ColorRamps;
   numericEmpty?: boolean;
-}
-
-interface KeyContentProps {
-  filteredKeyStuff: KeyItem[];
-  setCurrentColorSettingKey: (key: string) => void;
-  setColorSettingOpen: (open: boolean) => void;
-  setHoveredKey: (key: string | null) => void;
-  hoveredKey: string | null;
-  isTruncated: boolean;
+  datasetIdentity?: Backend["getConfig"];
 }
 
 const ColorRamp = ({ ramp }: { ramp: ColorRamp }) => {
@@ -121,131 +115,74 @@ const ColorRamp = ({ ramp }: { ramp: ColorRamp }) => {
   );
 };
 
-const Key = ({
-  keyStuff,
-  colorByField,
-  colorByGene,
-  colorByPosition,
-  config,
-  setCurrentColorSettingKey,
-  setColorSettingOpen,
-  hoveredKey,
-  setHoveredKey,
-  colorRamps,
-  numericEmpty,
-}: KeyProps) => {
-  const numLegendEntries = 10;
-  const [collapsed, setCollapsed] = useState(window.innerWidth < 800);
+// Remount only the legend content when its meaning changes. The user's compact
+// collapse preference survives field and dataset switches.
+const Key = (props: KeyProps) => {
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth < 800);
+  const [dataset, setDataset] = useState({ identity: props.datasetIdentity, version: 0 });
+  if (dataset.identity !== props.datasetIdentity)
+    setDataset({ identity: props.datasetIdentity, version: dataset.version + 1 });
+  const mode = props.numericEmpty ? "numeric-empty" : props.colorRamps?.[props.colorByField] ? "ramp" : "discrete";
+  const scope = JSON.stringify([dataset.version, props.colorByField, props.colorByGene, props.colorByPosition, mode]);
+  return <KeyContent key={scope} {...props} collapsed={collapsed} setCollapsed={setCollapsed} />;
+};
 
-  // sort by item.count in descending order
-  const sortedKeyStuff = [...keyStuff].sort((a, b) => b.count - a.count);
-
-  // truncate to 10 items
-  const isTruncated = sortedKeyStuff.length > numLegendEntries;
-  const topTenKeyStuff = sortedKeyStuff.slice(0, numLegendEntries);
-
-  // if there is an item with value of "", remove it
-  const filteredKeyStuff = topTenKeyStuff.filter((item) => item.value !== "");
-
-  if (colorByField === "None") {
-    return null;
-  }
-
-  if (filteredKeyStuff.length === 0 && !numericEmpty && !colorRamps?.[colorByField]) {
-    return null;
-  }
-
-  return (
-    <div
-      className={classNames(
-        "px-2 border-right border bg-white border-gray-200 opacity-90 absolute bottom-2 left-2 pt-1 pb-2",
-        collapsed ? "w-20" : "w-32"
-      )}
-      style={{
-        zIndex: 10,
-        cursor: "default",
-      }}
-    >
-      <h3
-        className="font-bold text-gray-600 text-xs cursor-pointer"
-        onClick={() => setCollapsed(!collapsed)}
-      >
-        {collapsed
-          ? "Key"
-          : colorByField === "genotype"
-          ? colorByGene + ":" + colorByPosition
-          : prettifyName(colorByField, config)}
-        {/* Arrow to collapse up/down */}
-        <span className="float-right text-xs cursor-pointer text-gray-600">
-          {collapsed ? "▲" : "▼"}
-        </span>
-      </h3>
-
-      {!collapsed &&
-        (numericEmpty ? <div className="text-xs">No valid numeric values</div> : colorRamps?.[colorByField] ? (
-          <div><ColorRamp ramp={colorRamps[colorByField]} />
-            {keyStuff.some(item => item.missing) && <div className="text-xs mt-2"><span className="circle w-2 h-2 mr-2 inline-block" style={{ background: `rgb(${MISSING_COLOR.join(",")})` }} />Missing</div>}
-          </div>
-        ) : (
-          <KeyContent
-            filteredKeyStuff={filteredKeyStuff}
-            setCurrentColorSettingKey={setCurrentColorSettingKey}
-            setColorSettingOpen={setColorSettingOpen}
-            setHoveredKey={setHoveredKey}
-            hoveredKey={hoveredKey}
-            isTruncated={isTruncated}
-          />
-        ))}
+function KeyContent({ keyStuff, colorByField, colorByGene, colorByPosition, config,
+  setCurrentColorSettingKey, setColorSettingOpen, hoveredKey, setHoveredKey,
+  colorRamps, numericEmpty, collapsed, setCollapsed,
+}: KeyProps & { collapsed: boolean; setCollapsed: (value: boolean) => void }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const editorFrame = useRef<number | null>(null);
+  const opener = useRef<HTMLButtonElement>(null);
+  const entries = useMemo(() => keyStuff.filter(item => item.value !== "")
+    .sort((a, b) => b.count - a.count), [keyStuff]);
+  const title = colorByField === "genotype" ? `${colorByGene}:${colorByPosition}` : prettifyName(colorByField, config);
+  useEffect(() => () => {
+    if (editorFrame.current !== null) cancelAnimationFrame(editorFrame.current);
+    setHoveredKey(null);
+  }, [setHoveredKey]);
+  const edit = (value: string) => {
+    setHoveredKey(null);
+    setCurrentColorSettingKey(value);
+    setColorSettingOpen(true);
+  };
+  const close = () => { setDialogOpen(false); setHoveredKey(null); };
+  const editFromDialog = (value: string) => {
+    close();
+    // Let the dialog release its focus trap before the existing editor mounts.
+    editorFrame.current = requestAnimationFrame(() => {
+      editorFrame.current = null;
+      opener.current?.focus();
+      edit(value);
+    });
+  };
+  if (colorByField === "None" || (!entries.length && !numericEmpty && !colorRamps?.[colorByField] && !dialogOpen)) return null;
+  return <>
+    <div aria-label="Colour legend" className={classNames(
+      "px-2 border-right border bg-white border-gray-200 opacity-90 absolute bottom-2 left-2 pt-1 pb-2",
+      collapsed ? "w-20" : "w-32"
+    )} style={{ zIndex: 10, cursor: "default" }}>
+      <h3><button type="button" className="font-bold text-gray-600 text-xs cursor-pointer text-left w-full"
+        aria-label={collapsed ? "Expand colour legend" : "Collapse colour legend"} aria-expanded={!collapsed}
+        onClick={() => { setCollapsed(!collapsed); close(); }}>
+        {collapsed ? "Key" : title}<span aria-hidden="true" className="float-right">{collapsed ? "▲" : "▼"}</span>
+      </button></h3>
+      {!collapsed && (numericEmpty ? <div className="text-xs">No valid numeric values</div> : colorRamps?.[colorByField] ? (
+        <div><ColorRamp ramp={colorRamps[colorByField]} />
+          {keyStuff.some(item => item.missing) && <div className="text-xs mt-2"><span className="circle w-2 h-2 mr-2 inline-block" style={{ background: `rgb(${MISSING_COLOR.join(",")})` }} />Missing</div>}
+        </div>
+      ) : <>
+        {entries.slice(0, 10).map(item => <LegendEntry key={legendEntryKey(item)} item={item}
+          hoveredKey={hoveredKey} setHoveredKey={setHoveredKey} onActivate={edit} />)}
+        {entries.length > 10 && <button ref={opener} type="button" aria-haspopup="dialog"
+          className="text-xs text-blue-700 underline mt-1 text-left" onClick={() => { setHoveredKey(null); setDialogOpen(true); }}>
+          Show all {entries.length.toLocaleString()} categories
+        </button>}
+      </>)}
     </div>
-  );
-};
-
-const KeyContent = ({
-  filteredKeyStuff,
-  setCurrentColorSettingKey,
-  setColorSettingOpen,
-  setHoveredKey,
-  hoveredKey,
-  isTruncated,
-}: KeyContentProps) => {
-  return (
-    <>
-      {filteredKeyStuff.map((item, index) => {
-        // item.color is [r, g, b]
-        const rgb = item.color;
-        const color = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
-        return (
-          <div
-            className="key-text text-xs text-gray-700 mt-0.5 break-all cursor-pointer"
-            key={index}
-            style={{
-              pointerEvents: "auto",
-            }}
-            onClick={() => {
-              if (item.missing) return;
-              setCurrentColorSettingKey(item.value);
-              setColorSettingOpen(true);
-            }}
-            onMouseEnter={() => {
-              if (!item.missing) setHoveredKey(item.value);
-            }}
-            onMouseLeave={() => setHoveredKey(null)}
-            title={item.missing ? "Missing metadata" : "Edit color"}
-          >
-            <div
-              style={{ backgroundColor: color }}
-              className={`circle w-2 h-2 mr-2 rounded-full inline-block transform transition-transform ${
-                hoveredKey === item.value ? "scale-150" : "scale-100"
-              }`}
-            />
-            {item.value}
-          </div>
-        );
-      })}
-
-      {isTruncated && <div className="text-xs text-gray-700">...</div>}
-    </>
-  );
-};
+    {dialogOpen && <LegendDialog title={title} entries={entries} onClose={close} onActivate={editFromDialog}
+      hoveredKey={hoveredKey} setHoveredKey={setHoveredKey} />}
+  </>;
+}
 
 export default Key;

@@ -9,45 +9,38 @@ Do not automatically begin Next Task or other backlog items.
 # Current Status
 
 **Phase:** Metadata infrastructure  
-**Status:** META-01 complete — validated; META-02 awaits planning.
+**Status:** META-01–04 complete. Both real fixture pairs pass browser validation, including the 2,399,238-tip compressed tree with Chrome's default heap allowance.
 
-Uploaded datasets now have shared metadata types, continuous numeric scales and stable categorical colours across the tree, matrix, legend and SVG export.
-
-META-01 implementation and validation are complete. Type checking, all 26 tests, component and website builds, and browser smoke checks pass. No new dependencies were added.
+Zoom controls preserve the current centre; matrix controls are collapsible with matching selector heights; metadata bars expose sample or aggregate tooltips. Worker density queries reuse exact summaries and cancel obsolete work. Compact metadata imports reduce large-tree memory. Type checking, 47 tests, component/website builds and browser checks pass; existing build warnings remain.
 
 # Current Task
 
-## META-01 — Metadata types and categorical colours
+## META-04 — Metadata interaction and large-tree rendering
 
-Allow each metadata column to be treated as numeric or categorical, with user-selectable types and appropriate colour handling.
+Completed the approved interaction, hover and worker-density plan, preserving shared colours, selection and HTTP compatibility.
 
 ### Checklist
 
-- [x] Add shared dataset metadata summaries, types and URL-backed overrides.
-- [x] Unify numeric and categorical colours across tree, matrix and legend.
-- [x] Add type controls and field-specific reshuffling.
-- [x] Update worker density, hover and export paths.
-- [x] Add regression tests and run type checking, tests and builds.
-- [x] Verify uploaded datasets interactively and record final handoff.
+- [x] Fix centred zoom and isolate overlay controls from canvas picking.
+- [x] Collapse matrix controls, align selector heights and remove colour disclaimers.
+- [x] Add individual and aggregate metadata-bar tooltips.
+- [x] Optimize categorical aggregation, bound caches and coalesce requests; reject stale responses.
+- [x] Validate both real fixtures, regression tests, type checking and builds; record performance.
+- [x] Complete Design Notes, Current Status and Session Log.
 
 ### Design constraints
 
-- Reuse existing metadata and colour-management infrastructure where practical.
-- Avoid creating separate colour assignments for different visualisation components.
-- Keep categorical colour assignments stable across filtering and sample selection.
-- Do not silently convert categorical identifiers into numeric data merely because their values look numeric.
-- Preserve existing behaviour for metadata without an explicit user-selected type where practical.
-- Do not introduce additional dependencies without a clear benefit.
+- Keep manual colour editing; remove disclaimer text only.
+- Matrix controls start collapsed and retain settings when closed.
+- Dense hover describes the rendered aggregate, never an arbitrary sample.
+- Optimize the uploaded worker path; preserve the HTTP backend contract.
+- Preserve fixed 2,000-row table pages and existing META-01–03 behaviour.
 
 # Next Task
 
-## META-02 — Metadata table
+## VIS-01 — Rotated tree and metadata layout
 
-Implement a metadata table in a resizable or otherwise appropriately sized panel at the bottom of the application.
-
-The table should display the currently available samples and metadata columns, and respond to sample selection.
-
-META-01 is complete. Next session: plan META-02 using the shared metadata controller and existing selection state. Do not begin implementation automatically.
+Plan VIS-01 after META-04. Do not automatically start it.
 
 ---
 
@@ -77,6 +70,15 @@ Supporting application:
 - `taxonium_website/`
 
 Most implementation work should occur in `taxonium_component/`. The website is needed for integration testing and interactive validation.
+
+Test fixtures (paths relative to `taxonium_component/`):
+
+| Tree and metadata | Tips | Coverage |
+| --- | ---: | --- |
+| `../tree_small.nwk` + `../metadata_small.csv` | 1,508 | Routine browser checks; `Cluster__autocolour`, `BAPS1__autocolour`, `BAPS2__autocolour` |
+| `../ATB_tree_batch2_cleaned.nwk.gz` + `../has_capsule_all.csv.gz` | 2,399,238 (verified) | Compressed uploads and large-tree performance; taxonomy, capsule flags and capsule counts |
+
+Both compressed paths are local symlinks resolving to available files. The large tree has 2,399,238 tips, independently checked against Newick delimiters and the importer. Its CSV contains 2,393,274 nonempty metadata records (2,393,275 lines including its header); this corrects the original fixture description. Missing metadata continues to use the shared missing-value behavior. Numeric-looking CSV strings remain categorical unless overridden; use Numeric for `n_capsule_systems` coverage. META-04 includes large-tree testing; earlier manual-only exclusions below describe historical META-02/03 scope.
 
 Avoid unrelated changes to other packages unless required by the Current Task.
 
@@ -212,21 +214,26 @@ Requirements:
 
 **Dependency:** META-01.
 
-Improve the metadata interaction experience for the user.
+Improve the metadata interaction experience for the user, and include
+testing of large trees.
 
 Requirements:
 
 - When zooming with the controls, the display moves to the top left corner, so the tree
   disappears without panning. The zoom should centre on the current
   position.
-- Remove the 'replace custom colours' disclaimer text throughout, as
-  custom colours are no longer supported.
+- Remove the 'replace custom colours' disclaimer text throughout. Retain existing
+  manual colour editing, as clarified in the approved META-04 plan.
 - Add a hover tooltip over the metadata bars, which displays the label
   associated with the hovered colour.
 - Create a drop-down box for the metadata matrix controls, including the
   width, colours and order, so the user can hide the controls.
 - Make the height of the boxes for the colour categories match the size
   of the colour by selection box.
+- Larger trees now take a long time to render metadata columns, so the
+  link between server-side preprocessing at each zoom level and the
+  client side display has been lost. Restore this processing, so that
+  metadata columns are displayed reactively.
 
 ---
 
@@ -335,8 +342,9 @@ A task is complete when:
 The project is complete when:
 
 - [x] Metadata typing and categorical colour management are implemented.
-- [ ] Metadata table is implemented.
-- [ ] Metadata legend supports large numbers of categories.
+- [x] Metadata table is implemented.
+- [x] Metadata legend supports large numbers of categories.
+- [x] Metadata interaction and large-tree density rendering improvements are implemented.
 - [ ] Rotated tree and metadata layout is implemented.
 - [ ] Geographic MapLibre component is implemented.
 - [ ] `.dot` spatial visualisation is implemented.
@@ -347,6 +355,58 @@ The project is complete when:
 ---
 
 # Design Notes
+
+## 2026-10-21 — META-04 approved implementation
+
+**Decision:** Fix overlay picking and preserve zoom centres; collapse controls by default; retain manual colour editing while removing disclaimers. Hover reports raw cell values or the exact rendered aggregate. Optimize uploaded-tree worker aggregation and request lifecycle without changing the HTTP backend interface. Validate both real fixture pairs, including the 2,393,275-tip compressed tree.
+
+**Status:** Complete; tests, builds and both real-fixture browser checks pass. Performance and fixture-count evidence is recorded in the Session Log.
+
+**Import dependency:** The unchanged compressed large fixture crashed Chrome during import. The Node worker baseline used about 10 GB heap. CSV records and merged tree nodes now use compact property construction instead of dynamically extended property dictionaries; metadata values and blank defaults are preserved. This directly enables the approved large-fixture validation.
+
+**Root causes:** Overlay pointer events were entering canvas picking with button-relative offsets. The worker density connection was still present; repeated categorical scans and request effects depending on changing backend objects added unnecessary work.
+
+**Density:** Exact dictionary-coded modes use bounded indexes (approximately 128 MiB) and 32 viewport summaries, independent of colour settings. Unselected indexes are released. One active worker request and the newest pending request are retained; cooperative checkpoints allow cancellation. Responses carry summaries for hover, and compatible older bitmaps remain at their original world bounds while a new viewport loads.
+
+## 2026-10-21 — META-03 approved implementation
+
+**Decision:** Replace the discrete legend's ellipsis with a full-list dialog over existing legend entries. Keep a ten-entry preview, stable frequency ordering, case-insensitive search and virtualized scrolling. Preserve click-to-edit by closing the dialog before opening the existing editor. Reset dialog state on dataset/field/locus/mode changes; keep colours live and reuse the supplied RGB values.
+
+**Consequences:** No new category aggregation, dataset-wide queries, dependencies, public API or URL state. Million-tip validation and META-04 remain outside this task.
+
+## 2026-10-21 — Legend dialog lifecycle and compatibility
+
+**Related task:** META-03
+
+**Decision:** `Key` filters empty labels before taking its ten-entry preview and supplies one memoized, stable frequency-sorted list to the preview and dialog. The existing `keyStuff` category aggregation, counts and RGB colours remain authoritative for both local and server-backed views. Missing metadata and a literal category named “Missing” have distinct row identities. Numeric ramps and empty-numeric messages retain their existing behaviour.
+
+**Presentation:** The Headless UI dialog is at most 560px wide and 80% of the dynamic viewport height. It supports case-insensitive label search, matching/total category counts, native keyboard scrolling and fixed 36px rows with four overscan rows using the existing window helper. Search resets on opening; membership/order and search changes reset scrolling while palette-only changes preserve it. Full labels appear in native titles and the scrollable hover/focus detail area. Empty results are explicit.
+
+**Lifecycle:** Dataset identity comes from the existing backend configuration-getter reference. Dataset, field, genotype-locus and legend-mode changes remount the scoped content and cancel pending edits; the compact collapse preference survives. Closing clears highlighting and restores focus. Activating an editable category closes the dialog before opening the existing editor on the next animation frame; missing-data entries remain read-only. No public Taxonium API, backend endpoint, worker protocol, URL state or dependency was added.
+
+**Browser finding:** Utility CSS is scoped to descendants of `.taxonium`, so the new portal root needs explicit fixed positioning for a nonzero accessible dialog box and correct stacking above tree controls. The final browser check covers both. This fix is confined to the new dialog.
+
+## 2026-10-20 — META-02 approved implementation
+
+**Related task:** META-02
+
+**Decision:** Use a collapsed, resizable bottom panel and worker-side pages of exactly 2,000 samples (except the final page). Tree selection controls the scope; column choices are independent of matrix settings. Use compact descendant-tip intervals and iterative traversal, lazy indexing, bounded field projection and row/column windowing. Keep display preferences in component state. Large one-million-tip validation is explicitly reserved for the user.
+
+**Consequences:** No page-size selector, table-driven selection, sorting, editing, export or server-backed table is added.
+
+## 2026-10-20 — Table indexing, selection and presentation
+
+**Related task:** META-02
+
+**Decision:** The optional local-backend table API returns exact counts and at most 2,000 tip rows, projecting at most 32 metadata fields plus the configured sample identifier. A lazy iterative traversal builds compact typed arrays for ordered tip positions and each node's descendant interval. Normalized IDs need no lookup Map; sparse IDs have a fallback. Page reads index directly into existing worker nodes without copying full metadata records or materializing clade membership lists. Row order follows a stable traversal of processed nodes.
+
+**Selection:** `useNodeDetails` exposes the immediately selected node ID while retaining its existing detail-loading interface. Clear, replacement and unmount cancel pending detail debounce work; generation checks reject late callbacks. Local detail/table responses carry unique request IDs. Upload messages precede child table queries, and a late-finishing older import cannot replace newer data. The table uses this shared tree selection, independently of searches and viewport bounds, and resets to page one whenever selection changes.
+
+**Presentation:** No existing table/windowing component was suitable. Small fixed-size window helpers bound rows, columns and the searchable column chooser without dependencies. The bottom panel starts collapsed, defaults to 300px when expanded, supports pointer/keyboard resizing and is capped at half the application height. The identifier and header stay pinned. Column choices and paging survive collapse, dataset-specific choices reset on replacement, and no table settings enter the URL. Only the current response is retained; dimensions survive column fetches to prevent scroll jumps. Collapsed panels issue no table queries. Errors expose Retry and requests time out after 30 seconds.
+
+**Colours and values:** Cells call the existing matrix colour resolver, including its boolean compatibility styling, independently of matrix column selection. Type/palette changes repaint without refetching rows. Raw values, including leading zeros, false and zero, are preserved; absent/empty values display an em dash. Native hover titles and focus tooltips expose full values. Tooltips clear when their rows change.
+
+**Validation scope:** Automated checks use up to 4,501 tips, a 5,000-node deep chain and 1,000 metadata fields. The browser fixture has 2,105 tips and 64 fields. The one-million-tip index, latency and memory checks remain explicitly reserved for the user's manual validation.
 
 ## 2026-10-16 — META-01 approved implementation
 
@@ -400,6 +460,8 @@ Use the following format:
 
 None currently recorded.
 
+Pending user validation (META-02, not an implementation blocker): manually check index construction, memory and interaction latency on the one-million-tip dataset. This was excluded from automated testing by request.
+
 For each blocker, record:
 
 - Related task ID.
@@ -412,6 +474,101 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 ---
 
 # Session Log
+
+## 2026-10-21 — META-04 complete
+
+**Completed implementation:**
+- Isolated canvas picking from overlay controls and used canvas-relative coordinates. Axis zoom preserves the current target; scalar zoom is supported. Matrix picking provides hover without turning aggregates into node selection; matrix clicks retain the previous clear-selection behavior.
+- Added a native, keyboard-accessible matrix disclosure, initially collapsed, retaining settings and showing selected-column count. Reused the Colour by selector styling. Removed custom-colour disclaimer text while retaining manual editing.
+- Added cell/sample and aggregate metadata tooltips using the rendered summaries, including missing labels, exact categorical modes, valid numeric means and boolean proportions. Stale summaries are not hoverable.
+- Added exact encoded categorical indexes, reusable counters and 32-entry viewport-summary caching independent of colours. Category indexes are bounded to approximately 128 MiB; unselected categorical/boolean/numeric indexes are released on subsequent density requests. Numeric and boolean prefix construction also yields for cancellation. No full-dataset per-category prefix tables are created.
+- Coalesced density requests to the active request plus the newest pending request. Added cancellation and dataset/request checks, removed unstable backend-object effect dependencies, and retained compatible bitmaps at their original world bounds during navigation.
+- Reduced large-import memory through compact metadata object construction; preserved existing parsing, values, duplicate-name assignments and blank defaults. No dependencies or external HTTP backend changes.
+
+**Fixtures:** Verified the small CSV has 1,508 records. The large Newick actually has 2,399,238 tips; its CSV has 2,393,274 nonempty records, or 2,393,275 lines including the header. Confirmed by the importer, independent Newick delimiter counting and CSV parsing. Updated the fixture catalog. These META-04 checks supersede earlier large-tree exclusions for this task only; the separately requested META-02 million-tip table-index handoff remains manual.
+
+**Validation:**
+- `npm run check-types`: passed, zero TypeScript errors.
+- `npm test -- --run`: 47 tests across 14 files passed. Added coverage for exact modes across ranges/missing values/ties, interrupted index construction, worker request coalescing and cancellation, callback isolation on replacement, legacy HTTP aggregate arrays, scalar/axis zoom and matrix resizing, and compact metadata import compatibility. Existing 40 tests remain passing.
+- Initial new-test failures were test assumptions: the default zoom axis is Y, and existing embedded Newick parsing retains its existing value syntax. Corrected harness expectations without changing that behavior or weakening existing tests.
+- `NODE_OPTIONS=--max-old-space-size=16384 npm run build`: component passed. Existing vm-browserify/loaders.gl and mixed-export warnings remain.
+- Website `npm run build`: passed against the final component bundle. Existing eval and bundle-size warnings remain. The first attempt was blocked by sandbox writes in the sibling package and passed after the permitted rerun. Small-fixture browser checks also passed: collapsed controls and retained selections, 30px selectors matching Colour by, all four axis zoom controls preserving a panned centre after resize, aggregate and exact sample/value tooltips, and the 1,508-sample table. Zero page errors.
+- Large-fixture Chrome: compressed upload completed in 24.9 seconds, all 20 metadata fields available, one/three/six columns rendered, Numeric override for `n_capsule_systems`, categorical density hover and repeated viewport updates passed; zero page errors. Warm rendered updates were 16–33 ms in the sampled interactions. Screenshots and scripts are in `/private/tmp/meta04-*`.
+- Small-fixture browser harness was corrected to wait for asynchronous checkbox/view-state/GPU picking updates, compare only metadata selectors, and pick actual rendered cells rather than a potentially superseded node list.
+- `git diff --check`: passed.
+
+**Performance evidence:** Full uploaded tree; columns introduced in order `Cluster`, `Phylum`, `Wzy`, `Genus`, `Domain`, `n_capsule_systems` (Numeric). Density requests used 400 aggregate rows, 800 output pixels, 24px columns and full/panned/zoomed Y ranges. Times include aggregation and rasterization; Chrome query times also include worker transfer. Rendering was measured separately by waiting for the new pickable bitmap at the requested bounds.
+
+| Columns | Browser first-use preparation | Warm repeat | Warm pan | Warm zoom | Recolour |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 571 ms | 137 ms | 376 ms | 144 ms | 3.1 ms |
+| 3 | 1,192 ms | 0.8 ms | 4.0 ms | 2.6 ms | 0.7 ms |
+| 6 | 1,098 ms | 1.3 ms | 8.4 ms | 4.6 ms | 0.8 ms |
+
+The early one-column samples overlap initial tree/application work and are retained rather than discarded. One/three/six column bitmap payloads were 115,200 / 268,800 / 499,200 bytes. The measured main-thread heap was about 330 MB, excluding worker memory.
+
+The unchanged browser baseline crashed during import. A Node bundle of the original worker/import path completed the same fixture in 100.2 seconds with about 10.1 GB heap immediately after import. The optimized Node path took 53.7 seconds with about 3.5 GB heap at the same checkpoint (about 2.5 GB after queries/GC). Original one/three-column warm repeat queries took 473 / 1,586 ms; optimized values were 1.18 / 0.71 ms. Original six-column timings were 8–16 seconds, but overlapped another memory-heavy run and must not be treated as controlled speedup measurements. These are single-run observations, not a formal benchmark suite. Raw results: `/private/tmp/meta04-worker-results-{baseline,optimized}.json` and `/private/tmp/meta04-rendered.json`. A final Chrome run with its default heap allowance also passed: 24.1-second upload, 14–33 ms sampled rendered navigation, and zero page errors (`/private/tmp/meta04-default-heap.json`).
+
+**Remaining issues:** No META-04 blockers. Existing build warnings remain. External live HTTP servers were not contacted; legacy response compatibility is covered with existing array-shaped payloads. The separate META-02 million-tip table-index check remains reserved for the user.
+
+**Next:** Plan VIS-01; do not automatically implement it.
+
+## 2026-10-21
+
+**Task:** META-03 — complete
+
+**Completed:**
+- Updated Current Task before implementation and the checklist during work; preserved the pre-existing uncommitted META-02 changes.
+- Replaced the discrete legend's ellipsis with “Show all N categories” and added a searchable, virtualized dialog using existing legend data.
+- Added keyboard-accessible preview/row actions, full-label details, missing-value distinction, live colours, lifecycle resets and focus-safe colour-editor handoff.
+- Kept category aggregation, numeric/genotype handling and server protocols intact. META-04 was not started.
+
+**Files/components:** `Key`, the new `LegendDialog`, its existing key tests, one dataset-identity prop at the `Deck` call site, and this plan. No package/dependency or website source changes.
+
+**Validation:**
+- Planning baseline: `npm run check-types` and 35 tests passed.
+- Final `npm run check-types`: passed, zero TypeScript errors.
+- Final `npm test -- --run`: all 40 tests across 11 files passed. New scenarios cover 0/1/10/11 entries, filtering before truncation, stable ties, a 10,000-category list with bounded DOM and last-entry access, case-insensitive/no-match searches, full labels, palette changes, missing versus literal “Missing”, focus/editor handoff, empty live lists, membership resets and dataset/field/locus/mode resets including pending-edit cancellation.
+- Initial new-test failures were a missing initial harness render and NodeList iteration unsupported by the repository's TypeScript lib configuration; both were fixed in tests without weakening checks.
+- Component `NODE_OPTIONS=--max-old-space-size=16384 npm run build`: passed. Existing vm-browserify/loaders.gl and mixed-export warnings remain.
+- Website `npm run build`: passed (about 6 seconds). Existing eval and bundle-size warnings remain.
+- Headless Chrome: 123-tip Newick/TSV fixture with 63 legend entries; preview size, search, bounded rows, keyboard scrolling, live shared RGB colours, missing/long labels, numeric-mode reset, Escape/backdrop/Close actions, focus restoration and actual colour-editor handoff passed. Desktop (1500×1000) and mobile (390×844) layouts fit their bounds with the metadata table open; portal hit testing confirms tree controls stay behind the dialog. Zero page errors.
+- Existing server protocol checked through a local HTTP mock: full legend search works with no new endpoint. No live external server was contacted.
+- Browser validation first exposed the portal-positioning issue documented above; the final run passed after the fix. Screenshots and smoke script are under `/private/tmp/meta03-*`.
+- `git diff --check`: passed.
+
+**Remaining issues:** No META-03 blockers. Existing build warnings remain. Million-tip tests/benchmarks were not run; the META-02 manual validation handoff is unchanged.
+
+**Next:** Plan META-04 — further metadata tweaks. Do not automatically implement it.
+
+## 2026-10-20
+
+**Task:** META-02 — complete
+
+**Completed:**
+- Updated Current Task before code changes and checked off milestones during implementation.
+- Added the uploaded-dataset metadata panel, fixed 2,000-row paging, searchable column visibility, pinned identifiers/headers and bounded row/column rendering.
+- Added lazy worker indexing and bounded field projection with exact all-tip, clade and single-tip counts.
+- Reused shared selection and colour state, preserved raw metadata, and protected requests/import replacement against stale results.
+- Kept META-03 and META-04 out of scope. No dependencies, server APIs or website source files changed.
+
+**Validation:**
+- `npm run check-types`: passed with zero TypeScript errors.
+- `npm test -- --run`: 35 tests in 11 files passed. Coverage includes page boundaries/counts, sparse IDs, empty and deep trees, invalid requests, 1,000-column projection/windowing, worker message routing, upload races, selection/clear races, cancellation/retry, column persistence, replacement reset and tooltip cleanup.
+- Initial new-test failures were incomplete test fixtures (required types and worker mutation lookup); corrected without weakening existing tests. No outstanding type or test errors.
+- `NODE_OPTIONS=--max-old-space-size=16384 npm run build`: component passed. Existing vm-browserify/loaders.gl and mixed-export warnings remain.
+- Website `NODE_OPTIONS=--max-old-space-size=16384 npm run build`: passed; existing bundle-size warnings remain.
+- Headless Chrome against the website with 2,105 tips and 64 metadata fields: fixed-page navigation and direct page entry; tip/clade selection, rapid select/clear and clearing back to all samples; horizontal/vertical scrolling with pinned identifiers and bounded DOM; searchable column visibility and persistence across collapse; no collapsed table requests; keyboard/pointer resize; shared colours and type/reshuffle updates without table refetches; raw identifiers and focus tooltips; search/zoom independence. Passed with zero page errors.
+- Existing server protocol and selection passed against a local HTTP mock; the metadata table and uploaded-dataset type controls remain hidden. No live external server was contacted.
+- Browser inspection found a stale focus tooltip after selection changed; fixed and covered by the final component test and Chrome run. The initial browser harness also needed to await the existing asynchronous matrix checkbox update.
+- `git diff --check`: passed.
+- Browser evidence and scripts are temporary files under `/private/tmp/meta02-*`.
+
+**Manual handoff:** Run the one-million-tip index/memory/latency check manually as requested. No million-tip fixture, benchmark or test was generated or run.
+
+**Remaining issues:** No META-02 implementation blockers. Existing build warnings remain; million-tip performance is unverified pending the user's manual check.
+
+**Next:** Plan META-03 (expandable categorical legend); do not automatically start it.
 
 ## 2026-10-16
 
@@ -448,6 +605,4 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 
 # Deviations
 
-Record significant departures from the agreed scope, implementation approach, or requirements.
-
-None currently recorded.
+META-04 required a small import-memory fix before the large fixture could load in Chrome. Compact metadata object construction replaces dynamic property dictionaries without changing metadata semantics. The updated fixture catalog also distinguishes the verified tree-tip count from the CSV line/record counts. These direct dependencies and the measurement limitations are documented above.

@@ -223,7 +223,7 @@ const useView = ({
   const zoomIncrement = useCallback(
     (increment: number, axis: string | undefined = zoomAxis) => {
         setViewState((vs: ViewStateType) => {
-          const newZoom = [...(vs.zoom as [number, number])];
+          const newZoom = typeof vs.zoom === "number" ? [vs.zoom, vs.zoom] : [...vs.zoom];
           if (axis === "X") {
             newZoom[0] = newZoom[0] + increment;
           } else if (axis === "Y") {

@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useEffect, useState } from "react";
+import type { MetadataTableRequest, MetadataTableResponse } from "../types/metadataTable";
+import { useCallback, useMemo, useLayoutEffect, useState } from "react";
 import type {
   Config,
   NodesResponse,
@@ -40,7 +41,8 @@ let onStatusReceipt: (receivedData: StatusData) => void = (receivedData) => {
 };
 
 let onConfigReceipt: (receivedData: Config) => void = () => {};
-let onDetailsReceipt: (receivedData: NodeDetails) => void = () => {};
+const detailsSetters = new Map<string, (data: NodeDetails) => void>();
+const tableSetters = new Map<string, (data: MetadataTableResponse) => void>();
 let onListReceipt: (receivedData: ListData["data"]) => void = () => {};
 let onNextStrainReceipt: (receivedData: NextStrainData["data"]) => void = (
   receivedData
@@ -89,13 +91,18 @@ worker.onmessage = (event: MessageEvent<LocalBackendMessage>) => {
       onConfigReceipt(data.data);
       break;
     case "details":
-      onDetailsReceipt(data.data);
+      detailsSetters.get(data.key)?.(data.data);
+      detailsSetters.delete(data.key);
       break;
     case "list":
       onListReceipt(data.data);
       break;
     case "nextstrain":
       onNextStrainReceipt(data.data);
+      break;
+    case "metadata_table":
+      tableSetters.get(data.key)?.(data.data);
+      tableSetters.delete(data.key);
       break;
     case "metadata_density":
       metadataDensitySetters[data.data.key]?.(data.data.result);
@@ -130,7 +137,12 @@ function useLocalBackend(
     }
     setStatusMessage(receivedData.data);
   };
-  useEffect(() => {
+  // Submit replacement data before child components issue passive-effect queries.
+  useLayoutEffect(() => {
+    detailsSetters.clear();
+    tableSetters.clear();
+    metadataDensitySetters = {};
+    visibleTipCountSetters = {};
     worker.postMessage({
       type: "upload",
       data: uploaded_data,
@@ -197,16 +209,24 @@ function useLocalBackend(
 
   const getDetails = useCallback(
     (node_id: string | number, setResult: (res: NodeDetails) => void) => {
-      worker.postMessage({
-        type: "details",
-        node_id: node_id,
-      });
-      onDetailsReceipt = (receivedData) => {
-        setResult(receivedData);
-      };
+      const key = String(++densityRequestId);
+      detailsSetters.set(key, setResult);
+      worker.postMessage({ type: "details", key, node_id });
     },
-    []
+    [uploaded_data]
   );
+
+  const queryMetadataTable = useCallback((request: MetadataTableRequest,
+    callback: (response: MetadataTableResponse) => void) => {
+    const key = String(++densityRequestId);
+    const timer = setTimeout(() => {
+      tableSetters.delete(key);
+      callback({ error: "Metadata request timed out. Please retry." });
+    }, 30000);
+    tableSetters.set(key, result => { clearTimeout(timer); callback(result); });
+    worker.postMessage({ type: "metadata_table", key, request });
+    return () => { clearTimeout(timer); tableSetters.delete(key); };
+  }, [uploaded_data]);
 
   const getConfig = useCallback((setResult: (res: Config) => void) => {
     worker.postMessage({
@@ -256,8 +276,12 @@ function useLocalBackend(
       });
 
       metadataDensitySetters[key] = (receivedData) => {
-        callback(receivedData);
+        if (!receivedData.cancelled) callback(receivedData);
         delete metadataDensitySetters[key];
+      };
+      return () => {
+        delete metadataDensitySetters[key];
+        worker.postMessage({ type: "cancel_metadata_density", key });
       };
     },
     [uploaded_data]
@@ -295,6 +319,7 @@ function useLocalBackend(
       statusMessage,
       setStatusMessage,
       getTipAtts,
+      queryMetadataTable,
       queryMetadataDensity,
       queryVisibleTipCount,
       getNextstrainJson,
@@ -308,6 +333,7 @@ function useLocalBackend(
     statusMessage,
     setStatusMessage,
     getTipAtts,
+    queryMetadataTable,
     queryMetadataDensity,
     queryVisibleTipCount,
     getNextstrainJson,

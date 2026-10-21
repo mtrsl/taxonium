@@ -456,15 +456,15 @@ function SearchPanel({
             </label>
           </div>
         )}
-        <div className="space-y-2 border-t border-gray-100 pt-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-gray-700">Metadata matrix</h3>
+        <details className="space-y-2 border-t border-gray-100 pt-3">
+          <summary className="cursor-pointer font-bold text-gray-700">
+            Metadata matrix
             {metadataMatrix.selectedFields.length > 0 && (
-              <span className="text-xs text-gray-500">
+              <span className="ml-2 text-xs font-normal text-gray-500">
                 {metadataMatrix.selectedFields.length} columns
               </span>
             )}
-          </div>
+          </summary>
           {metadataMatrix.availableFields.length > 0 && (
             <label className="flex items-center gap-2 text-xs text-gray-700">
               <span>Lane width</span>
@@ -557,7 +557,7 @@ function SearchPanel({
               )}
             </>
           )}
-        </div>
+        </details>
       </div>
       <div className="py-3 flex flex-col md:min-h-0 border-gray-200">
         <h2 className="font-bold text-gray-700 flex justify-between items-center mb-2">

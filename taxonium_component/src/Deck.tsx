@@ -144,6 +144,9 @@ function Deck({
 
   const onClickOrMouseMove = useCallback(
     (event: React.MouseEvent) => {
+      // Overlay controls bubble through this container, but are not tree gestures.
+      if (!(event.target instanceof HTMLCanvasElement)) return;
+      const canvasBounds = event.target.getBoundingClientRect();
       const reactEvent = event as any;
       if (reactEvent._reactName === "onClick") {
         setMouseDownIsMinimap(false);
@@ -171,8 +174,8 @@ function Deck({
 
 
       const pickInfo = deckRef.current?.pickObject({
-        x: event.nativeEvent.offsetX,
-        y: event.nativeEvent.offsetY,
+        x: event.clientX - canvasBounds.left,
+        y: event.clientY - canvasBounds.top,
         radius: 10,
       });
 
@@ -194,7 +197,7 @@ function Deck({
         }
       }
 
-      if (!pickInfo && reactEvent._reactName === "onClick") {
+      if ((!pickInfo || pickInfo.viewport?.id === "metadata-matrix") && reactEvent._reactName === "onClick") {
         selectedDetails.clearNodeDetails();
         if (onNodeSelect) {
           onNodeSelect(null);
@@ -240,7 +243,7 @@ function Deck({
     [hoverDetails]
   );
 
-  const { layers, layerFilter, keyStuff, triggerSVGdownload } = useLayers({
+  const { layers, layerFilter, keyStuff, triggerSVGdownload, getMetadataTooltip } = useLayers({
     backend,
     data,
     search,
@@ -371,6 +374,7 @@ function Deck({
         treenomeReferenceInfo={treenomeReferenceInfo}
       />
       <MemoizedKey
+        datasetIdentity={backend.getConfig}
         keyStuff={keyStuff}
         colorByField={colorBy.colorByField}
         colorByGene={colorBy.colorByGene}
@@ -409,7 +413,11 @@ function Deck({
         onViewStateChange={onViewStateChange}
         layerFilter={layerFilter}
         layers={layers}
-        onHover={setMouseXY}
+        getTooltip={getMetadataTooltip}
+        onHover={(info) => {
+          setMouseXY(info);
+          if (!info.object || info.layer?.id.startsWith("metadata-matrix-")) setHoverInfo(null);
+        }}
         onResize={(size) => {
           setDeckSize(size);
           window.setTimeout(() => {

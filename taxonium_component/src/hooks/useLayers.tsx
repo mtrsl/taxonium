@@ -1,3 +1,4 @@
+import { densityValueLabel, metadataValueLabel } from "../utils/metadataTooltip";
 import { isMissingMetadata } from "../utils/metadata";
 import {
   BitmapLayer,
@@ -857,7 +858,7 @@ const useLayers = ({
             maxY: densityMaxY,
           }
         : null,
-    [backend, densityMaxY, densityMinY]
+    [backend.type, backend.queryVisibleTipCount, densityMaxY, densityMinY]
   );
 
   const visibleTipCountRequestKey = useMemo(
@@ -868,6 +869,7 @@ const useLayers = ({
   const [resolvedVisibleTipCountData, setResolvedVisibleTipCountData] = useState<{
     key: string;
     data: VisibleTipCountResponse;
+    dataset: Config;
   } | null>(null);
 
   useEffect(() => {
@@ -884,6 +886,7 @@ const useLayers = ({
       if (!cancelled) {
         setResolvedVisibleTipCountData({
           key: visibleTipCountRequestKey,
+          dataset: config,
           data: result,
         });
       }
@@ -892,10 +895,11 @@ const useLayers = ({
     return () => {
       cancelled = true;
     };
-  }, [backend, visibleTipCountRequest, visibleTipCountRequestKey]);
+  }, [backend.queryVisibleTipCount, config, visibleTipCountRequest, visibleTipCountRequestKey]);
 
   const localVisibleTipCount =
-    resolvedVisibleTipCountData?.data.visibleTipCount ?? null;
+    resolvedVisibleTipCountData?.dataset === config && resolvedVisibleTipCountData.key === visibleTipCountRequestKey
+      ? resolvedVisibleTipCountData.data.visibleTipCount : null;
   const localPixelsPerTip =
     deckSize && deckSize.height > 0 && localVisibleTipCount && localVisibleTipCount > 0
       ? deckSize.height / localVisibleTipCount
@@ -915,7 +919,7 @@ const useLayers = ({
 
   const metadataRenderMode: MetadataMatrixRenderMode = useMemo(() => {
     if (backend.type === "local") {
-      return localMetadataRenderMode;
+      return localVisibleTipCount === null ? "density" : localMetadataRenderMode;
     }
     if (sampledPixelsPerTip >= 16) {
       return "boxes";
@@ -927,7 +931,7 @@ const useLayers = ({
       return "strips";
     }
     return "density";
-  }, [backend.type, localMetadataRenderMode, sampledPixelsPerTip]);
+  }, [backend.type, localMetadataRenderMode, localVisibleTipCount, sampledPixelsPerTip]);
 
   const pixelsPerTip =
     backend.type === "local" ? localPixelsPerTip : sampledPixelsPerTip;
@@ -937,8 +941,7 @@ const useLayers = ({
       !metadataMatrix.isEnabled ||
       metadataRenderMode !== "density" ||
       !backend.queryMetadataDensity ||
-      metadataMatrix.matrixFields.length === 0 ||
-      (backend.type === "local" && !localVisibleTipCount)
+      metadataMatrix.matrixFields.length === 0
     ) {
       return null;
     }
@@ -961,14 +964,15 @@ const useLayers = ({
       })),
     } satisfies MetadataDensityRequest;
   }, [
-    backend,
+    backend.queryMetadataDensity,
+    metadataMatrix.panelWidth,
+    metadataMatrix.columnWidth,
     deckSize?.height,
     metadataMatrix.isEnabled,
     metadataMatrix.matrixFields,
     metadataRenderMode,
     densityMinY,
     densityMaxY,
-    localVisibleTipCount,
   ]);
 
   const metadataDensityRequestKey = useMemo(
@@ -976,16 +980,13 @@ const useLayers = ({
     [metadataDensityRequest]
   );
 
-  const [metadataDensityData, setMetadataDensityData] = useState<{
-    key: string;
-    data: MetadataDensityResponse;
-    dataset: Config;
-  } | null>(null);
+  // A prior bitmap remains aligned in world coordinates while a viewport request runs.
+  const densityStyleKey = JSON.stringify([metadataMatrix.matrixFields, metadataMatrix.columnWidth, metadataMatrix.panelWidth, deckSize?.height]);
   const [resolvedMetadataDensityData, setResolvedMetadataDensityData] = useState<{
     key: string;
+    styleKey: string;
     data: MetadataDensityResponse;
     dataset: Config;
-    spanY: number;
   } | null>(null);
   const densityCanvasCacheRef = useRef<DensityCanvasCache | null>(null);
 
@@ -999,23 +1000,23 @@ const useLayers = ({
     }
 
     let cancelled = false;
-    backend.queryMetadataDensity(metadataDensityRequest, (result) => {
+    const cancelRequest = backend.queryMetadataDensity(metadataDensityRequest, (result) => {
       if (!cancelled) {
         const resolved = {
           key: metadataDensityRequestKey,
           dataset: config,
           data: result,
-          spanY: densitySpanY,
+          styleKey: densityStyleKey,
         };
-        setMetadataDensityData(resolved);
         setResolvedMetadataDensityData(resolved);
       }
     });
 
     return () => {
       cancelled = true;
+      if (typeof cancelRequest === "function") cancelRequest();
     };
-  }, [backend, config, metadataDensityRequest, metadataDensityRequestKey]);
+  }, [backend.queryMetadataDensity, config, densityStyleKey, metadataDensityRequest, metadataDensityRequestKey]);
 
   const sortedVisibleTipNodesForMatrix = useMemo(
     () =>
@@ -1064,16 +1065,13 @@ const useLayers = ({
     ]
   );
 
-  const densityPayload =
-    backend.type === "local"
-      ? resolvedMetadataDensityData?.dataset === config && resolvedMetadataDensityData.key === metadataDensityRequestKey ? resolvedMetadataDensityData.data : null
-      : metadataDensityData && metadataDensityData.dataset === config &&
-          metadataDensityRequestKey &&
-          metadataDensityData.key === metadataDensityRequestKey &&
-          metadataDensityData.data.minY === densityMinY &&
-          metadataDensityData.data.maxY === densityMaxY
-        ? metadataDensityData.data
-        : null;
+  const densityPayload = resolvedMetadataDensityData?.dataset === config
+    && resolvedMetadataDensityData.styleKey === densityStyleKey
+    && (backend.type === "local" || resolvedMetadataDensityData.key === metadataDensityRequestKey)
+    ? resolvedMetadataDensityData.data : null;
+  const densityCurrent = resolvedMetadataDensityData?.key === metadataDensityRequestKey;
+  const bitmapMinY = densityPayload?.minY ?? densityMinY;
+  const bitmapMaxY = densityPayload?.maxY ?? densityMaxY;
 
   const densityCanvas = useMemo(
     () =>
@@ -1187,7 +1185,7 @@ const useLayers = ({
         layerType: "PolygonLayer",
         id: `metadata-matrix-${metadataRenderMode}`,
         data: matrixCells,
-        pickable: false,
+        pickable: true,
         stroked:
           metadataRenderMode === "boxes" ||
           (isLocalRectangleMode && boxRectangleTransitionProgress > 0),
@@ -1252,7 +1250,7 @@ const useLayers = ({
         layerType: "PolygonLayer",
         id: "metadata-matrix-strips",
         data: matrixCells,
-        pickable: false,
+        pickable: true,
         stroked: false,
         filled: true,
         getPolygon: (d: MetadataMatrixCell) => [
@@ -1282,12 +1280,12 @@ const useLayers = ({
         layerType: "BitmapLayer",
         id: "metadata-matrix-density",
         image: densityCanvas,
-        pickable: false,
+        pickable: densityCurrent,
         bounds: [
           0,
-          densityMinY,
+          bitmapMinY,
           metadataMatrix.panelWidth,
-          densityMinY + densitySpanY,
+          bitmapMaxY,
         ],
         desaturate: 0,
         transparentColor: [0, 0, 0, 0],
@@ -1549,7 +1547,28 @@ const useLayers = ({
     metadataMatrix.isEnabled && deckSize ? { treeWidth: deckSize.width, matrixWidth: metadataMatrix.panelWidth } : undefined,
   );
 
+  const getMetadataTooltip = (info: { layer?: { id: string } | null; object?: MetadataMatrixCell; coordinate?: number[] }) => {
+    if (!info.layer?.id.startsWith("metadata-matrix-")) return null;
+    if (info.layer.id === "metadata-matrix-density") {
+      if (!densityCurrent || !densityPayload || !info.coordinate) return null;
+      const [x, y] = info.coordinate;
+      const column = Math.floor((x - 12) / metadataMatrix.columnWidth);
+      const field = metadataMatrix.matrixFields[column];
+      if (!field || x < 13 + column * metadataMatrix.columnWidth || x > 11 + (column + 1) * metadataMatrix.columnWidth) return null;
+      const summary = densityPayload.fields[field.field];
+      if (!summary) return { text: `${field.label}\nSummary unavailable` };
+      const row = Math.floor((densityPayload.maxY - y) / (densityPayload.maxY - densityPayload.minY) * summary.totalCounts.length);
+      const value = densityValueLabel({ ...summary, kind: field.kind }, row);
+      return value ? { text: `${field.label}\n${value}` } : null;
+    }
+    const cell = info.object;
+    if (!cell?.node) return null;
+    const field = metadataMatrix.matrixFields.find(field => field.field === cell.field);
+    return { text: `${field?.label ?? cell.field}\n${metadataValueLabel(cell.node[cell.field])}\n${cell.node.name ?? ""}` };
+  };
+
   return {
+    getMetadataTooltip,
     layers: processedLayers,
     layerFilter,
     keyStuff,

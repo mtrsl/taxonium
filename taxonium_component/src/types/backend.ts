@@ -1,3 +1,4 @@
+import type { MetadataTableRequest, MetadataTableResponse } from "./metadataTable";
 import type { MetadataSummary, MetadataColorSpec } from "../utils/metadata";
 import type { Node, Mutation } from "./node";
 import type React from "react";
@@ -105,6 +106,7 @@ export interface DynamicDataWithLookup {
 }
 
 export interface MetadataDensityField {
+  categoryValues?: (string | null)[];
   kind?: "boolean" | "numeric" | "categorical";
   trueCounts?: Uint32Array | number[];
   totalCounts: Uint32Array | number[];
@@ -121,6 +123,7 @@ export interface MetadataDensityBitmap {
 }
 
 export interface MetadataDensityResponse {
+  cancelled?: boolean;
   fields: Record<string, MetadataDensityField>;
   minY: number;
   maxY: number;
@@ -183,7 +186,7 @@ export interface BaseBackend {
   queryMetadataDensity?(
     args: MetadataDensityRequest,
     callback: (res: MetadataDensityResponse) => void
-  ): void;
+  ): void | (() => void);
   queryVisibleTipCount?(
     args: {
       minY: number;
@@ -202,6 +205,7 @@ export interface ServerBackend extends BaseBackend {
 }
 
 export interface LocalBackend extends BaseBackend {
+  queryMetadataTable?: (request: MetadataTableRequest, callback: (response: MetadataTableResponse) => void) => () => void;
   type: "local";
   backend_url?: undefined;
   getNextstrainJsonUrl?(nodeId: string | number, config: Config): string;

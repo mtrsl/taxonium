@@ -53,6 +53,7 @@ export const Button = ({
 };
 
 export interface SelectProps {
+  "aria-label"?: string;
   onChange?: React.ChangeEventHandler<HTMLSelectElement>;
   className?: string;
   children?: React.ReactNode;
@@ -61,6 +62,7 @@ export interface SelectProps {
 }
 
 export const Select = ({
+  "aria-label": ariaLabel,
   onChange,
   className,
   children,
@@ -69,6 +71,7 @@ export const Select = ({
 }: SelectProps) => {
   return (
     <select
+      aria-label={ariaLabel}
       className={classNames(
         "border bg-white text-gray-900 text-sm hover:text-gray-700 py-1 pl-2 pr-6",
         "focus:ring-gray-800 focus:border-gray-800",

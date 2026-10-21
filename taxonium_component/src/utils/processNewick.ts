@@ -319,10 +319,10 @@ export async function processMetadataFile(
       } else {
         name = values[0];
       }
-      const as_obj: Record<string, string> = {};
-      values.slice(1).forEach((value, j) => {
-        as_obj["meta_" + headers[j + 1]] = value;
-      });
+      // Create a compact property layout instead of a dictionary per CSV row.
+      const as_obj: Record<string, string> = Object.fromEntries(
+        values.slice(1).map((value, j) => ["meta_" + headers[j + 1], value])
+      );
 
       output.set(name, as_obj);
     }
@@ -375,23 +375,17 @@ export async function processNewickAndMetadata(
     }
   });
 
-  const blanksList: [string, string][] = Object.entries(blanks);
-
-  sendStatusMessage({
-    message: "Assigning metadata to nodes",
-  });
-  tree.nodes.forEach((node: any) => {
+  const blankKeys = Object.keys(blanks);
+  sendStatusMessage({ message: "Assigning metadata to nodes" });
+  tree.nodes.forEach((node: any, index: number) => {
     const this_metadata = metadata.get(node.name);
-    // add blanks for any properties not currently set
-    blanksList.forEach(([key, value]) => {
-      if (!node[key]) {
-        node[key] = value;
-      }
-    });
-
-    if (this_metadata) {
-      Object.assign(node, this_metadata);
+    // Object spread keeps the many shared metadata properties in a compact shape.
+    // Mutating every node with 20+ new properties creates multi-GB dictionaries.
+    const merged = { ...blanks, ...node, ...this_metadata };
+    for (const key of blankKeys) {
+      if (!node[key] && !Object.prototype.hasOwnProperty.call(this_metadata ?? {}, key)) merged[key] = "";
     }
+    tree.nodes[index] = merged;
   });
 
   return tree;

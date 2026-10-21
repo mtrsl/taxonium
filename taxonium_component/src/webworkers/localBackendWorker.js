@@ -1,4 +1,6 @@
-import { summarizeMetadata, createMetadataColor, categoricalMode } from "../utils/metadata";
+import { buildMetadataTableIndex, queryMetadataTablePage } from "../utils/metadataTable";
+import { buildCategoryIndex, categoryRangeMode } from "../utils/categoricalDensity";
+import { summarizeMetadata, createMetadataColor, numericMetadataValue } from "../utils/metadata";
 import filtering from "taxonium_data_handling/filtering.js";
 import { getNextstrainSubtreeJson } from "taxonium_data_handling/exporting.js";
 import {
@@ -17,7 +19,6 @@ import {
   normalizeMetadataValue,
   TRUE_VALUES,
 } from "../utils/metadataMatrix";
-import { buildNumericPrefixValues } from "../utils/metadataDensity";
 
 postMessage({ data: "Worker starting" });
 
@@ -44,6 +45,11 @@ const cache_helper = {
 };
 
 let processedUploadedData;
+let uploadGeneration = 0;
+let pendingDensity = null;
+let activeDensity = null;
+const DENSITY_CANCELLED = Symbol("density cancelled");
+const yieldToMessages = () => new Promise(resolve => setTimeout(resolve, 0));
 
 const sendStatusMessage = (status_obj) => {
   postMessage({
@@ -116,39 +122,36 @@ const createMetadataDensityIndex = (nodes) => {
     fieldPrefixTrueCounts: {},
     fieldPrefixNumericValues: {},
     fieldInfo,
+    categoryIndexes: new Map(),
+    summaries: new Map(),
   };
 };
 
-const buildFieldTruePrefixCounts = (tipNodes, field) => {
-  const prefixCounts = new Uint32Array(tipNodes.length + 1);
-  for (let index = 0; index < tipNodes.length; index++) {
-    prefixCounts[index + 1] =
-      prefixCounts[index] +
-      (isTruthyMetadataValue(tipNodes[index][field]) ? 1 : 0);
+const ensureFieldTruePrefixCounts = async (index, field, checkpoint) => {
+  if (!index.fieldPrefixTrueCounts[field]) {
+    const counts = new Uint32Array(index.tipNodes.length + 1);
+    for (let i = 0; i < index.tipNodes.length; i++) {
+      if (i % 65536 === 0) await checkpoint();
+      counts[i + 1] = counts[i] + (isTruthyMetadataValue(index.tipNodes[i][field]) ? 1 : 0);
+    }
+    index.fieldPrefixTrueCounts[field] = counts;
   }
-  return prefixCounts;
+  return index.fieldPrefixTrueCounts[field];
 };
 
-const ensureFieldTruePrefixCounts = (metadataDensityIndex, field) => {
-  if (!metadataDensityIndex.fieldPrefixTrueCounts[field]) {
-    metadataDensityIndex.fieldPrefixTrueCounts[field] = buildFieldTruePrefixCounts(
-      metadataDensityIndex.tipNodes,
-      field
-    );
+const ensureFieldNumericPrefixValues = async (index, field, checkpoint) => {
+  if (!index.fieldPrefixNumericValues[field]) {
+    const sums = new Float64Array(index.tipNodes.length + 1);
+    const counts = new Uint32Array(index.tipNodes.length + 1);
+    for (let i = 0; i < index.tipNodes.length; i++) {
+      if (i % 65536 === 0) await checkpoint();
+      const value = numericMetadataValue(index.tipNodes[i][field]);
+      sums[i + 1] = sums[i] + (value ?? 0);
+      counts[i + 1] = counts[i] + (value === null ? 0 : 1);
+    }
+    index.fieldPrefixNumericValues[field] = { sums, counts };
   }
-  return metadataDensityIndex.fieldPrefixTrueCounts[field];
-};
-
-const buildFieldNumericPrefixValues = (tipNodes, field) => {
-  return buildNumericPrefixValues(tipNodes.map((node) => node[field]));
-};
-
-const ensureFieldNumericPrefixValues = (metadataDensityIndex, field) => {
-  if (!metadataDensityIndex.fieldPrefixNumericValues[field]) {
-    metadataDensityIndex.fieldPrefixNumericValues[field] =
-      buildFieldNumericPrefixValues(metadataDensityIndex.tipNodes, field);
-  }
-  return metadataDensityIndex.fieldPrefixNumericValues[field];
+  return index.fieldPrefixNumericValues[field];
 };
 
 export const queryNodes = async (boundsForQueries) => {
@@ -287,7 +290,7 @@ const getMetadataDensity = async ({
   outputHeight,
   columnWidth,
   fields,
-}) => {
+}, checkpoint = async () => {}) => {
   await waitForProcessedData();
   if (!processedUploadedData.metadataDensityIndex) {
     processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
@@ -337,10 +340,43 @@ const getMetadataDensity = async ({
     rowUpperBounds[rowIndex] = endTipExclusive;
   }
 
+  // Retain only active columns. Summary caches contain viewport-sized arrays, never tips.
+  const selected = new Set(fields.map(({ field }) => field));
+  for (const field of metadataDensityIndex.categoryIndexes.keys()) {
+    if (!selected.has(field)) metadataDensityIndex.categoryIndexes.delete(field);
+  }
+  for (const cache of [metadataDensityIndex.fieldPrefixTrueCounts, metadataDensityIndex.fieldPrefixNumericValues]) {
+    for (const field of Object.keys(cache)) if (!selected.has(field)) delete cache[field];
+  }
   const fieldResults = {};
-  fields.forEach(({ field, kind: requestedKind }) => {
+  for (const { field, kind: requestedKind } of fields) {
+    await checkpoint();
     const fieldInfo = metadataDensityIndex.fieldInfo[field];
     const kind = requestedKind ?? fieldInfo?.kind ?? "boolean";
+    const cacheKey = JSON.stringify([field, kind, minY, maxY, height]);
+    const cached = metadataDensityIndex.summaries.get(cacheKey);
+    if (cached) {
+      metadataDensityIndex.summaries.delete(cacheKey);
+      metadataDensityIndex.summaries.set(cacheKey, cached);
+      fieldResults[field] = cached;
+      continue;
+    }
+    let categoryIndex;
+    if (kind === "categorical") {
+      categoryIndex = metadataDensityIndex.categoryIndexes.get(field);
+      if (!categoryIndex) {
+        categoryIndex = await buildCategoryIndex(metadataDensityIndex.tipNodes.length,
+          i => metadataDensityIndex.tipNodes[i][field], checkpoint);
+        metadataDensityIndex.categoryIndexes.set(field, categoryIndex);
+        // Bound encoded arrays and dictionary storage to approximately 128 MiB.
+        let bytes = 0;
+        for (const [key, index] of [...metadataDensityIndex.categoryIndexes].reverse()) {
+          bytes += index.codes.byteLength + index.counts.byteLength + index.touched.byteLength
+            + index.labels.reduce((sum, label) => sum + label.length * 2 + 16, 0);
+          if (bytes > 128 * 1024 * 1024) metadataDensityIndex.categoryIndexes.delete(key);
+        }
+      }
+    }
     const categoryValues = kind === "categorical" ? new Array(height).fill(null) : undefined;
     const trueCounts = kind === "boolean" ? new Uint32Array(height) : undefined;
     const totalCounts = new Uint32Array(height);
@@ -349,19 +385,19 @@ const getMetadataDensity = async ({
 
     const prefixTrueCounts =
       kind === "boolean"
-        ? ensureFieldTruePrefixCounts(metadataDensityIndex, field)
+        ? await ensureFieldTruePrefixCounts(metadataDensityIndex, field, checkpoint)
         : null;
     const prefixNumericValues =
       kind === "numeric"
-        ? ensureFieldNumericPrefixValues(metadataDensityIndex, field)
+        ? await ensureFieldNumericPrefixValues(metadataDensityIndex, field, checkpoint)
         : null;
 
     for (let rowIndex = 0; rowIndex < height; rowIndex++) {
+      if (rowIndex % 16 === 0) await checkpoint();
       const startTipIndex = rowLowerBounds[rowIndex];
       const endTipExclusive = rowUpperBounds[rowIndex];
       if (categoryValues) {
-        function* values() { for (let i = startTipIndex; i < endTipExclusive; i++) yield metadataDensityIndex.tipNodes[i][field]; }
-        categoryValues[rowIndex] = categoricalMode(values());
+        categoryValues[rowIndex] = categoryRangeMode(categoryIndex, startTipIndex, endTipExclusive);
         totalCounts[rowIndex] = endTipExclusive - startTipIndex;
       } else if (kind === "numeric" && prefixNumericValues) {
         valueSums[rowIndex] =
@@ -386,8 +422,13 @@ const getMetadataDensity = async ({
       valueCounts,
       categoryValues,
     };
-  });
+    metadataDensityIndex.summaries.set(cacheKey, fieldResults[field]);
+    while (metadataDensityIndex.summaries.size > 32) {
+      metadataDensityIndex.summaries.delete(metadataDensityIndex.summaries.keys().next().value);
+    }
+  }
 
+  await checkpoint();
   const rgba = new Uint8ClampedArray(width * outputHeight * 4);
   const fieldPixelSpans = fields.map((fieldConfig, fieldIndex) => ({
     field: fieldConfig.field,
@@ -455,6 +496,7 @@ const getMetadataDensity = async ({
     }
   });
 
+  result.fields = fieldResults;
   result.bitmap = {
     rgba,
     width,
@@ -494,14 +536,18 @@ const getVisibleTipCount = async ({ minY, maxY }) => {
 onmessage = async (event) => {
   //Process uploaded data:
   const { data } = event;
-  if (data.type === "upload" && data.data?.filename) processedUploadedData = undefined;
+  if (data.type === "upload" && data.data?.filename) {
+    processedUploadedData = undefined;
+    uploadGeneration++;
+  }
+  const generation = uploadGeneration;
   if (
     data.type === "upload" &&
     data.data &&
     data.data.filename &&
     data.data.filename.includes("jsonl")
   ) {
-    processedUploadedData = await processJsonl(
+    const uploaded = await processJsonl(
       data.data,
       sendStatusMessage,
       ReadableWebToNodeStream,
@@ -509,6 +555,8 @@ onmessage = async (event) => {
       streamValues,
       Buffer
     );
+    if (generation !== uploadGeneration) return;
+    processedUploadedData = uploaded;
     processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
       processedUploadedData.nodes
     );
@@ -520,10 +568,12 @@ onmessage = async (event) => {
     (data.data.filetype === "nwk" || data.data.filetype === "nexus")
   ) {
     data.data.useDistances = true;
-    processedUploadedData = await processNewickAndMetadata(
+    const uploaded = await processNewickAndMetadata(
       data.data,
       sendStatusMessage
     );
+    if (generation !== uploadGeneration) return;
+    processedUploadedData = uploaded;
     processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
       processedUploadedData.nodes
     );
@@ -533,10 +583,12 @@ onmessage = async (event) => {
     data.data.filename &&
     data.data.filetype === "nextstrain"
   ) {
-    processedUploadedData = await processNextstrain(
+    const uploaded = await processNextstrain(
       data.data,
       sendStatusMessage
     );
+    if (generation !== uploadGeneration) return;
+    processedUploadedData = uploaded;
     processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
       processedUploadedData.nodes
     );
@@ -560,7 +612,7 @@ onmessage = async (event) => {
     }
     if (data.type === "details") {
       const result = await getDetails(data.node_id);
-      postMessage({ type: "details", data: result });
+      postMessage({ type: "details", key: data.key, data: result });
     }
     if (data.type === "list") {
       const result = await getList(data.node_id, data.key);
@@ -575,13 +627,52 @@ onmessage = async (event) => {
       );
       postMessage({ type: "nextstrain", data: result });
     }
+    if (data.type === "metadata_table") {
+      try {
+        await waitForProcessedData();
+        const dataset = processedUploadedData;
+        dataset.metadataTableIndex ??= buildMetadataTableIndex(dataset.nodes);
+        dataset.metadataTableFields ??= new Set(Object.keys(dataset.metadataDensityIndex.fieldInfo));
+        const result = queryMetadataTablePage(dataset.nodes, dataset.metadataTableIndex, dataset.metadataTableFields, data.request);
+        postMessage({ type: "metadata_table", key: data.key, data: result });
+      } catch (error) {
+        postMessage({ type: "metadata_table", key: data.key, data: { error: error.message ?? "Unable to load metadata" } });
+      }
+    }
+    if (data.type === "cancel_metadata_density") {
+      if (activeDensity?.key === data.key) activeDensity.cancelled = true;
+      if (pendingDensity?.key === data.key) pendingDensity = null;
+    }
     if (data.type === "metadata_density") {
-      const result = await getMetadataDensity(data);
-      const transfer = result.bitmap ? [result.bitmap.rgba.buffer] : [];
-      postMessage({
-        type: "metadata_density",
-        data: { key: data.key, result },
-      }, transfer);
+      if (pendingDensity) {
+        postMessage({ type: "metadata_density", data: { key: pendingDensity.key,
+          result: { fields: {}, minY: pendingDensity.minY, maxY: pendingDensity.maxY, height: pendingDensity.height, cancelled: true } } });
+      }
+      pendingDensity = data;
+      if (activeDensity) { activeDensity.cancelled = true; return; }
+      while (pendingDensity) {
+        const request = pendingDensity;
+        pendingDensity = null;
+        activeDensity = request;
+        const generation = uploadGeneration;
+        let lastYield = performance.now();
+        const checkpoint = async () => {
+          if (performance.now() - lastYield < 8) return;
+          await yieldToMessages();
+          lastYield = performance.now();
+          if (request.cancelled || generation !== uploadGeneration) throw DENSITY_CANCELLED;
+        };
+        try {
+          const result = await getMetadataDensity(request, checkpoint);
+          await checkpoint();
+          postMessage({ type: "metadata_density", data: { key: request.key, result } },
+            result.bitmap ? [result.bitmap.rgba.buffer] : []);
+        } catch (error) {
+          if (error !== DENSITY_CANCELLED) console.error("Metadata density failed", error);
+          postMessage({ type: "metadata_density", data: { key: request.key,
+            result: { fields: {}, minY: request.minY, maxY: request.maxY, height: request.height, cancelled: true } } });
+        } finally { activeDensity = null; }
+      }
     }
     if (data.type === "visible_tip_count") {
       const result = await getVisibleTipCount(data);

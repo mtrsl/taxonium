@@ -24,6 +24,7 @@ export interface ConfigData {
 
 export interface DetailsData {
   type: "details";
+  key: string;
   data: import("./backend").NodeDetails;
 }
 
@@ -53,7 +54,14 @@ export interface VisibleTipCountData {
   };
 }
 
+export interface MetadataTableData {
+  type: "metadata_table";
+  key: string;
+  data: import("./metadataTable").MetadataTableResponse;
+}
+
 export type LocalBackendMessage =
+  | MetadataTableData
   | StatusData
   | QueryData
   | SearchData

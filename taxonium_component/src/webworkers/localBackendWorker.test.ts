@@ -7,7 +7,87 @@ vi.mock("taxonium_data_handling/importing.js", () => ({
 }));
 
 describe("uploaded metadata worker", () => {
+  it("pages real worker requests, echoes request IDs and rebuilds the lazy index on replacement", async () => {
+    vi.resetModules();
+    const sent: any[] = [];
+    vi.stubGlobal("postMessage", (message: unknown) => sent.push(message));
+    vi.stubGlobal("onmessage", null);
+    try {
+      await import("./localBackendWorker.js");
+      const send = async (data: unknown) => { await (globalThis.onmessage as any)({ data }); return sent.at(-1); };
+      const nodes = [
+        { node_id: 0, parent_id: 0, is_tip: false, mutations: [], y: 0 },
+        ...Array.from({ length: 2001 }, (_, i) => ({
+          node_id: i + 1, parent_id: 0, is_tip: true, mutations: [], y: i,
+          name: `sample-${i}`, meta_group: `G${i % 3}`,
+        })),
+      ];
+      const upload = (nodes: unknown[]) => send({ type: "upload", data: { filename: "fixture.jsonl",
+        fixture: { nodes, mutations: [], node_to_mut: {}, overwrite_config: {} } } });
+      await upload(nodes);
+      expect(sent.some(message => message.type === "metadata_table")).toBe(false);
+      const request = { selectedNodeId: null, pageIndex: 1, fields: ["meta_group"], nameField: "name" };
+      const page = await send({ type: "metadata_table", key: "page-1", request });
+      expect(page.key).toBe("page-1");
+      expect(page.data.total).toBe(2001);
+      expect(page.data.rows).toEqual([{ nodeId: 2001, name: "sample-2000", values: ["G2"] }]);
+      const tip = await send({ type: "metadata_table", key: "tip", request: { ...request, selectedNodeId: 3 } });
+      expect(tip.data.total).toBe(1);
+      expect(tip.data.pageIndex).toBe(0);
+      expect(tip.data.rows[0].nodeId).toBe(3);
+      const detail = await send({ type: "details", key: "details-3", node_id: 3 });
+      expect(detail.key).toBe("details-3");
+      expect(detail.data.node_id).toBe(3);
+      const invalid = await send({ type: "metadata_table", key: "bad", request: { ...request, fields: Array(33).fill("meta_group") } });
+      expect(invalid.data.error).toMatch("maximum 32");
+      await upload(nodes.slice(0, 2));
+      const replaced = await send({ type: "metadata_table", key: "new-dataset", request });
+      expect(replaced.data.total).toBe(1);
+      expect(replaced.data.rows[0].name).toBe("sample-0");
+      let finishOldUpload!: (value: unknown) => void;
+      const oldUpload = send({ type: "upload", data: { filename: "old.jsonl",
+        fixture: new Promise(resolve => { finishOldUpload = resolve; }) } });
+      await upload(nodes.slice(0, 3));
+      finishOldUpload({ nodes, mutations: [], node_to_mut: {}, overwrite_config: {} });
+      await oldUpload;
+      const raced = await send({ type: "metadata_table", key: "after-race", request });
+      expect(raced.data.total).toBe(2);
+    } finally { vi.unstubAllGlobals(); }
+  });
+  it("coalesces density requests and rejects cancelled work without blocking the newest request", async () => {
+    vi.resetModules();
+    const sent: any[] = [];
+    vi.stubGlobal("postMessage", (message: unknown) => sent.push(message));
+    vi.stubGlobal("onmessage", null);
+    let time = 0;
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => time += 10);
+    try {
+      await import("./localBackendWorker.js");
+      const send = (data: unknown) => (globalThis.onmessage as any)({ data });
+      await send({ type: "upload", data: { filename: "fixture.jsonl", fixture: {
+        nodes: Array.from({ length: 100 }, (_, i) => ({ y: i / 100, is_tip: true, meta_group: i % 2 ? "B" : "A" })),
+        mutations: [], overwrite_config: {},
+      } } });
+      const request = { type: "metadata_density", minY: 0, maxY: 1, height: 2, outputHeight: 2, width: 36, columnWidth: 24,
+        fields: [{ field: "meta_group", kind: "categorical", color: [1, 2, 3] }] };
+      const first = send({ ...request, key: "first" });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await send({ ...request, key: "middle" });
+      await send({ ...request, key: "last" });
+      await first;
+      const responses = sent.filter(message => message.type === "metadata_density");
+      expect(responses.find(message => message.data.key === "first").data.result.cancelled).toBe(true);
+      expect(responses.find(message => message.data.key === "middle").data.result.cancelled).toBe(true);
+      expect(responses.find(message => message.data.key === "last").data.result.fields.meta_group.categoryValues).toEqual(["A", "A"]);
+      const cancelled = send({ ...request, key: "cancel" });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await send({ type: "cancel_metadata_density", key: "cancel" });
+      await cancelled;
+      expect(sent.at(-1).data.result.cancelled).toBe(true);
+    } finally { clock.mockRestore(); vi.unstubAllGlobals(); }
+  });
   it("summarizes the complete dataset and renders numeric and categorical density with shared colours", async () => {
+    vi.resetModules();
     const sent: any[] = [];
     vi.stubGlobal("postMessage", (message: unknown) => sent.push(message));
     vi.stubGlobal("onmessage", null);
@@ -28,6 +108,8 @@ describe("uploaded metadata worker", () => {
     const args = { type: "metadata_density", key: "first", minY: 0, maxY: 1, height: 1, outputHeight: 1, width: 72, columnWidth: 24,
       fields: [categorySpec, numericSpec].map(spec => ({ field: spec.field, kind: spec.kind, color: [0,0,0], colorSpec: spec })) };
     const result = (await send(args)).data.result;
+    expect(result.fields.meta_group.categoryValues).toEqual(["B"]);
+    expect(result.fields.meta_score.valueCounts[0]).toBe(2);
     const pixel = (x: number) => Array.from(result.bitmap.rgba.slice(x * 4, x * 4 + 4));
     expect(pixel(14)).toEqual([...createMetadataColor(categorySpec)("B"), 255]);
     expect(pixel(38)).toEqual([...createMetadataColor(numericSpec)(5), 255]);

@@ -1,3 +1,4 @@
+import MetadataTablePanel from "./components/MetadataTablePanel";
 import useMetadata from "./hooks/useMetadata";
 import React, { useMemo, useState, useRef } from "react";
 import "./App.css";
@@ -296,8 +297,8 @@ function Taxonium({
   return (
     <GlobalErrorBoundary>
       <div
-        className="w-full h-full flex taxonium"
-        style={{ width: "100%", height: "100%", display: "flex" }}
+        className="w-full h-full flex flex-col taxonium"
+        style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}
       >
         <div id="taxonium-root" />
         <Toaster />
@@ -310,7 +311,7 @@ function Taxonium({
           textColor="#000"
           effect="solid"
         />
-        <div className="grow overflow-hidden flex flex-col md:flex-row">
+        <div className="grow min-h-0 overflow-hidden flex flex-col md:flex-row">
           <div
             className={
               sidebarOpen
@@ -391,6 +392,8 @@ function Taxonium({
             )}
           </div>
         </div>
+        {backend.type === "local" && backend.queryMetadataTable && <MetadataTablePanel backend={backend} config={config}
+          selectedNodeId={selectedDetails.selectedNodeId} metadataMatrix={metadataMatrix} />}
       </div>
     </GlobalErrorBoundary>
   );
