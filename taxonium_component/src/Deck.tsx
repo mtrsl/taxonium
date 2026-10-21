@@ -38,6 +38,7 @@ import type { Node, Mutation } from "./types/node";
 import type { ColorHook, ColorBy } from "./types/color";
 import type { MetadataMatrix } from "./types/metadataMatrix";
 import { darkenMetadataColor } from "./utils/metadataMatrix";
+import { metadataTooltipStyle } from "./utils/metadataTooltip";
 
 const MemoizedKey = React.memo(Key);
 
@@ -413,7 +414,13 @@ function Deck({
         onViewStateChange={onViewStateChange}
         layerFilter={layerFilter}
         layers={layers}
-        getTooltip={getMetadataTooltip}
+        getTooltip={(info) => {
+          const tooltip = getMetadataTooltip(info);
+          return tooltip ? {
+            ...tooltip,
+            style: metadataTooltipStyle(info.x, info.y, deckSize.width, deckSize.height),
+          } : null;
+        }}
         onHover={(info) => {
           setMouseXY(info);
           if (!info.object || info.layer?.id.startsWith("metadata-matrix-")) setHoverInfo(null);

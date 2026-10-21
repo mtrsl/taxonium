@@ -9,17 +9,20 @@ Do not automatically begin Next Task or other backlog items.
 # Current Status
 
 **Phase:** Metadata infrastructure  
-**Status:** META-01–04 complete. Both real fixture pairs pass browser validation, including the 2,399,238-tip compressed tree with Chrome's default heap allowance.
+**Status:** META-01–04 complete, including the META-04 tooltip placement follow-up. Both real fixture pairs passed the original browser validation, including the 2,399,238-tip compressed tree with Chrome's default heap allowance. The tooltip follow-up passes small-fixture browser validation.
 
-Zoom controls preserve the current centre; matrix controls are collapsible with matching selector heights; metadata bars expose sample or aggregate tooltips. Worker density queries reuse exact summaries and cancel obsolete work. Compact metadata imports reduce large-tree memory. Type checking, 47 tests, component/website builds and browser checks pass; existing build warnings remain.
+Zoom controls preserve the current centre; matrix controls are collapsible with matching selector heights; metadata bars expose sample or aggregate tooltips to the left of the cursor, within the canvas. Worker density queries reuse exact summaries and cancel obsolete work. Compact metadata imports reduce large-tree memory. Type checking, 47 tests, component/website builds and browser checks pass; existing build warnings remain.
 
 # Current Task
 
 ## META-04 — Metadata interaction and large-tree rendering
 
-Completed the approved interaction, hover and worker-density plan, preserving shared colours, selection and HTTP compatibility.
+Completed META-04 and its tooltip placement follow-up. Metadata tooltips appear left of the cursor and remain inside the visualization, preserving existing content and metadata behavior. VIS-01 is not started.
 
 ### Checklist
+
+- [x] Place metadata tooltips left of the cursor, constrain long labels and handle vertical edges.
+- [x] Validate tooltip bounds in the browser and record follow-up checks.
 
 - [x] Fix centred zoom and isolate overlay controls from canvas picking.
 - [x] Collapse matrix controls, align selector heights and remove colour disclaimers.
@@ -356,6 +359,10 @@ The project is complete when:
 
 # Design Notes
 
+## 2026-10-21 — META-04 tooltip placement
+
+**Decision:** Apply positioning through Deck's existing tooltip style interface, shared by individual-cell and aggregate tooltips. Anchor the tooltip 12px left of the pointer, choose above or below according to available vertical space, and constrain it to the canvas with an 8px margin. Long labels wrap within 320px; exceptionally tall content is clipped to the available height. Tooltip text and metadata interpretation are unchanged. No additional hover state or dependency is needed.
+
 ## 2026-10-21 — META-04 approved implementation
 
 **Decision:** Fix overlay picking and preserve zoom centres; collapse controls by default; retain manual colour editing while removing disclaimers. Hover reports raw cell values or the exact rendered aggregate. Optimize uploaded-tree worker aggregation and request lifecycle without changing the HTTP backend interface. Validate both real fixture pairs, including the 2,393,275-tip compressed tree.
@@ -474,6 +481,14 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 ---
 
 # Session Log
+
+## 2026-10-21 — META-04 tooltip placement follow-up complete
+
+**Request and scope:** Reopened META-04 because metadata tooltips were hidden beyond the right-hand bars. Updated Current Task before implementation. Reused Deck tooltip styling to position both individual and aggregate tooltips on the left, with wrapping and vertical bounds. VIS-01 remains unstarted; no blockers.
+
+**Validation:** `npm run check-types` passes with zero errors; `npm test -- --run` passes all 47 tests in 14 files. Component build (`NODE_OPTIONS=--max-old-space-size=16384 npm run build`) and website `npm run build` pass with existing dependency, mixed-export, eval and bundle-size warnings. `git diff --check` passes.
+
+**Browser:** Chrome smoke check with `tree_small.nwk` and `metadata_small.csv` passes. Individual and aggregate tooltip rectangles stay left of the cursor and within the canvas; upper/lower-half placement and long-label wrapping at a maximum width of 320px are verified. Existing zoom, controls, selection and table checks pass with no page errors. Screenshots: `/private/tmp/meta04-tooltip-density.png` and `/private/tmp/meta04-tooltip-cell.png`. Large-fixture performance checks were not repeated for this presentation-only follow-up; the million-tip index remains reserved for manual validation.
 
 ## 2026-10-21 — META-04 complete
 
