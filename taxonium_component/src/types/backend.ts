@@ -205,6 +205,7 @@ export interface ServerBackend extends BaseBackend {
 }
 
 export interface LocalBackend extends BaseBackend {
+  queryGeography?: (request: import("./geography").GeographicRequest, callback: (response: import("./geography").GeographicResponse) => void) => () => void;
   queryMetadataTable?: (request: MetadataTableRequest, callback: (response: MetadataTableResponse) => void) => () => void;
   type: "local";
   backend_url?: undefined;

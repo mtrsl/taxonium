@@ -269,6 +269,31 @@ export async function processNewick(
   return output;
 }
 
+/** Stream CSV records without splitting quoted commas, quotes or embedded newlines. */
+function* csvRecords(text: string): Generator<string[]> {
+  let row: string[] = [], value = "", start = 0, quoted = false;
+  const separators = /[",\r\n]/g;
+  let match: RegExpExecArray | null;
+  while ((match = separators.exec(text))) {
+    const i = match.index, char = match[0];
+    if (char === '"') {
+      if (quoted && text[i + 1] === '"') {
+        value += text.slice(start, i) + '"'; start = i + 2; separators.lastIndex++;
+      } else if (quoted || i === start) {
+        value += text.slice(start, i); start = i + 1; quoted = !quoted;
+      }
+    } else if (!quoted) {
+      row.push(value + text.slice(start, i)); value = ""; start = i + 1;
+      if (char !== ",") {
+        if (char === "\r" && text[i + 1] === "\n") { start++; separators.lastIndex++; }
+        yield row; row = [];
+      }
+    }
+  }
+  if (quoted) throw new Error("Unclosed quote in metadata CSV");
+  if (start < text.length || row.length || value) { row.push(value + text.slice(start)); yield row; }
+}
+
 export async function processMetadataFile(
   data: MetadataFile,
   sendStatusMessage: (msg: StatusMessage) => void
@@ -279,39 +304,23 @@ export async function processMetadataFile(
 
   the_data = await fetch_or_extract(data, logStatusToConsole, "metadata");
 
-  const lines = the_data.split("\n");
   const output = new Map<string, Record<string, string>>();
-  let splitFunction: (line: string) => string[];
-
-  if (data.filetype == "meta_tsv") {
-    splitFunction = (x) => x.split("\t");
-  } else if (data.filetype == "meta_csv") {
-    // remove any double quotes
-    splitFunction = (x) => x.split(",").map((x) => x.replace(/"/g, ""));
-  } else {
-    sendStatusMessage({
-      error: "Filetype was not set, please raise an issue on our GitHub page",
-    });
-    throw new Error(
-      "Filetype was not set, please raise an issue on our GitHub page"
-    );
-  }
+  const records = data.filetype === "meta_csv" ? csvRecords(the_data) :
+    data.filetype === "meta_tsv" ? the_data.split("\n").map(line => line.split("\t")) : null;
+  if (!records) throw new Error("Metadata filetype must be CSV or TSV");
 
   let headers: string[] = [];
 
-  lines.forEach((line, i) => {
+  let i = 0;
+  for (const values of records) {
     if (i % 10000 === 0) {
       sendStatusMessage({
         message: "Parsing metadata file",
-        percentage: (i / lines.length) * 100,
       });
-
     }
     if (i === 0) {
-      headers = splitFunction(line);
+      headers = values;
     } else {
-      const values = splitFunction(line);
-
       let name;
       if (data.taxonColumn) {
         const taxon_column_index = headers.indexOf(data.taxonColumn);
@@ -326,7 +335,8 @@ export async function processMetadataFile(
 
       output.set(name, as_obj);
     }
-  });
+    i++;
+  }
   sendStatusMessage({
     message: "Finalising",
   });

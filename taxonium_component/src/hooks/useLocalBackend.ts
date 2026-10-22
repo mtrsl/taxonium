@@ -1,3 +1,4 @@
+import type { GeographicRequest, GeographicResponse } from "../types/geography";
 import type { MetadataTableRequest, MetadataTableResponse } from "../types/metadataTable";
 import { useCallback, useMemo, useLayoutEffect, useState } from "react";
 import type {
@@ -42,6 +43,7 @@ let onStatusReceipt: (receivedData: StatusData) => void = (receivedData) => {
 
 let onConfigReceipt: (receivedData: Config) => void = () => {};
 const detailsSetters = new Map<string, (data: NodeDetails) => void>();
+const geographicSetters = new Map<string, (data: GeographicResponse) => void>();
 const tableSetters = new Map<string, (data: MetadataTableResponse) => void>();
 let onListReceipt: (receivedData: ListData["data"]) => void = () => {};
 let onNextStrainReceipt: (receivedData: NextStrainData["data"]) => void = (
@@ -100,6 +102,10 @@ worker.onmessage = (event: MessageEvent<LocalBackendMessage>) => {
     case "nextstrain":
       onNextStrainReceipt(data.data);
       break;
+    case "geography":
+      geographicSetters.get(data.key)?.(data.data);
+      geographicSetters.delete(data.key);
+      break;
     case "metadata_table":
       tableSetters.get(data.key)?.(data.data);
       tableSetters.delete(data.key);
@@ -141,6 +147,7 @@ function useLocalBackend(
   useLayoutEffect(() => {
     detailsSetters.clear();
     tableSetters.clear();
+    geographicSetters.clear();
     metadataDensitySetters = {};
     visibleTipCountSetters = {};
     worker.postMessage({
@@ -215,6 +222,20 @@ function useLocalBackend(
     },
     [uploaded_data]
   );
+
+  const queryGeography = useCallback((request: GeographicRequest,
+    callback: (response: GeographicResponse) => void) => {
+    const key = String(++densityRequestId);
+    const timer = setTimeout(() => {
+      if (!geographicSetters.has(key)) return;
+      geographicSetters.delete(key);
+      worker.postMessage({ type: "cancel_geography", key });
+      callback({ error: "Map request timed out. Please retry." });
+    }, 60000);
+    geographicSetters.set(key, result => { clearTimeout(timer); callback(result); });
+    worker.postMessage({ type: "geography", key, request });
+    return () => { clearTimeout(timer); geographicSetters.delete(key); worker.postMessage({ type: "cancel_geography", key }); };
+  }, [uploaded_data]);
 
   const queryMetadataTable = useCallback((request: MetadataTableRequest,
     callback: (response: MetadataTableResponse) => void) => {
@@ -320,6 +341,7 @@ function useLocalBackend(
       setStatusMessage,
       getTipAtts,
       queryMetadataTable,
+      queryGeography,
       queryMetadataDensity,
       queryVisibleTipCount,
       getNextstrainJson,
@@ -334,6 +356,7 @@ function useLocalBackend(
     setStatusMessage,
     getTipAtts,
     queryMetadataTable,
+    queryGeography,
     queryMetadataDensity,
     queryVisibleTipCount,
     getNextstrainJson,

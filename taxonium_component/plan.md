@@ -8,32 +8,32 @@ Do not automatically begin Next Task or other backlog items.
 
 # Current Status
 
-**Phase:** Visualisation improvements
-**Status:** VIS-01 complete. META-01–04 remain complete.
+**Phase:** Complementary visualisations
+**Status:** COMP-01 complete. VIS-01 and META-01–04 remain complete.
 
-The Layout control switches between standard and downward trees, with horizontal metadata rows and left-to-right sample order. The URL retains the preference; Treenome temporarily uses standard layout. Shared colours, selection/table scope, canonical navigation, density processing and exports are preserved. Metadata labels and overlays adapt to orientation and available space.
+The geographic map follows selected samples/clades below the tree and shares metadata-column aggregation, colours and tooltips. MapLibre provides zoom/pan and OpenFreeMap Liberty provides the basemap with attribution; tile failures retain the sample layer on a plain background. All 5,815 pf samples map correctly after fixing shared CSV parsing of quoted commas. COMP-02 fixtures are documented but its implementation has not started.
 
-Type checking, 53 tests across 16 files, component/website production builds and browser validation pass. The small fixture covers desktop/mobile interaction, minimap, search, exports and reload; the 2,399,238-tip compressed fixture covers density rendering and repeated orientation changes. Existing build warnings remain. No VIS-01 blockers.
+Validation passed: type checking, 62 tests, the separately enabled million-sample benchmark, component/website builds, full map browser interactions, and existing small/2,399,238-tip browser regressions. Component builds use the established 16 GiB Node heap setting; existing bundler warnings remain. No COMP-01 blockers.
 
 # Current Task
 
-## VIS-01 — Rotated tree and metadata layout
+## COMP-01 — Geographic map
 
-Completed the approved downward layout, preserving top-to-bottom tip order left-to-right. Standard layout remains the default; Treenome temporarily overrides the URL-backed preference.
+Completed the approved worker-backed MapLibre map below the tree and above the metadata table. It follows tree selection and reuses metadata colours, aggregate summaries and tooltip formatting.
 
 ### Checklist
 
-- [x] Add shared orientation, camera and viewport transforms with URL-backed controls.
-- [x] Align tree, metadata, labels, hover, minimap and navigation in both layouts.
-- [x] Preserve SVG/PNG exports and existing backend/metadata contracts.
-- [x] Add regression coverage; validate types, tests, builds and both real fixtures.
-- [x] Record decisions, validation, status and handoff.
+- [x] Add coordinate detection, shared selection/aggregation and cancellable worker geographic queries.
+- [x] Add responsive map panel, OpenFreeMap basemap, hover, fitting and lifecycle handling.
+- [x] Validate pf fixtures, edge cases, million-sample performance and existing functionality.
+- [x] Run types, tests, component/website builds and browser checks.
+- [x] Record decisions, results, status and handoff.
 
 # Next Task
 
-## COMP-01 — Geographic map
+## COMP-02 — `.dot` spatial visualisation
 
-Plan COMP-01 after VIS-01. Do not automatically start it.
+Plan COMP-02 after COMP-01. Do not automatically start it.
 
 ---
 
@@ -68,6 +68,8 @@ Test fixtures (paths relative to `taxonium_component/`):
 
 | Tree and metadata | Tips | Coverage |
 | --- | ---: | --- |
+| `../pf.tree.nwk` + `../pf.metadata.csv` | 5,815 | Matching unique IDs; all valid `Lat`/`Long` pairs, 75 locations, 28 countries; COMP-01 GPS/overlap/selection/colour coverage |
+| `../pf.embedding.dot` with the pf tree/CSV | 5,815 | Matching nodes with finite separate `x`/`y` attributes, no edges; reserved for COMP-02 |
 | `../tree_small.nwk` + `../metadata_small.csv` | 1,508 | Routine browser checks; `Cluster__autocolour`, `BAPS1__autocolour`, `BAPS2__autocolour` |
 | `../ATB_tree_batch2_cleaned.nwk.gz` + `../has_capsule_all.csv.gz` | 2,399,238 (verified) | Compressed uploads and large-tree performance; taxonomy, capsule flags and capsule counts |
 
@@ -351,6 +353,15 @@ The project is complete when:
 
 # Design Notes
 
+## 2026-10-22 — COMP-01 approved design and implementation
+
+Map below tree, above table; follow tree selection only. Reuse metadata-column backend summaries/rendered colours and tooltip format. Metadata-only colouring, with labelled neutral genotype mode. OpenFreeMap Liberty basemap with attribution and a plain-background fallback. Local datasets only; preserve server APIs and tree exports. Coordinate aliases include case-insensitive Lat/Long. Worker geographic bins target 32 screen pixels and at most 4,096 markers, with bounded caching and cooperative cancellation. Fit on initial load/selection changes, retain camera for colour changes. COMP-02 fixtures documented only.
+
+Use one cached geographic geometry and active metadata summary/index per dataset. Columns and maps share category counting/ties, aggregate RGBA rendering, tooltip formatting and selected-tip intervals; only spatial group membership differs. MapLibre and its worker source load lazily, with a blob worker URL for portable library embedding. Polar coordinates retain validity but clamp for Mercator projection.
+
+The pf fixture exposed quoted-comma CSV corruption in 11 Peru site names. Fixing the shared importer is a directly necessary COMP-01 dependency and intentionally corrects those metadata values everywhere. The parser preserves quoted commas, escaped quotes and multiline CSV fields.
+
+
 ## 2026-10-22 — VIS-01 rendering and interaction findings
 
 **Decision:** Supply canonical viewport dimensions to the existing query and metadata code; swap layer model matrices and display cameras only. Density remains sampled along canonical Y, which becomes screen X. SVG applies the same swap and an affine density-image transform with viewport clipping.
@@ -484,6 +495,34 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 ---
 
 # Session Log
+
+## 2026-10-22 — COMP-01 complete
+
+**Approved decisions:** Map below tree, above table; follow tree selection only. Reuse metadata-column backend summaries/rendered colours and tooltip format. Metadata-only colouring, with labelled neutral genotype mode. OpenFreeMap Liberty basemap with attribution and a plain-background fallback. Local datasets only; preserve server APIs and tree exports. Coordinate aliases include case-insensitive Lat/Long. Worker geographic bins target 32 screen pixels and at most 4,096 markers, with bounded caching and cooperative cancellation. Fit on initial load/selection changes, retain camera for colour changes. COMP-02 fixtures documented only.
+
+**Validation:** Complete; see final results below. **Blockers:** None.
+
+**COMP-01 progress:** Added geographic index/query, bounded world-aligned bins, shared selection and aggregate renderer, cancellable latest-request handling, and the map panel. Coordinate availability uses metadata summaries (metadataFields can be empty). Real pf import revealed an existing CSV bug: quoted commas in 11 Peru site names shifted GPS columns. The shared importer now preserves quoted commas, escaped quotes and multiline CSV fields; this directly necessary dependency also corrects table/metadata values. MapLibre 6 uses a lazily imported worker source served through a blob URL, keeping library embedding independent of the host application base path.
+
+**Interim validation:** 61 tests passed plus an opt-in million-sample benchmark. Initial default-heap component build failed at ~4 GiB; 16 GiB build succeeded. Million-sample coincident/dispersed runs: indexing 99/185 ms, first query 124/159 ms, cached recolour 0.4/1.1 ms, pan 60/42 ms; 1/3,057 markers and ~34.3 MiB retained typed-array indexes. These were interim measurements; final browser validation is recorded below.
+
+
+**Final validation:**
+
+- `npm run check-types`: passed, zero TypeScript errors.
+- `npm run test -- --run`: 62 tests passed across 18 files; the opt-in benchmark is skipped in this default run.
+- `RUN_GEOGRAPHY_BENCHMARK=1 npm run test -- --run src/utils/geography.benchmark.test.ts`: passed separately. Measures the exact indexing/query utilities used by the worker, including cooperative yields; not an end-to-end million-GPS browser timing. Coincident/dispersed million-sample results are recorded above.
+- `NODE_OPTIONS=--max-old-space-size=16384 npm run build`: component ES/UMD bundles passed. The first default-heap build failed at ~4 GiB; no source errors caused that failure. MapLibre and its worker are separate lazy chunks in ES builds; the existing UMD packaging is monolithic.
+- Website `npm run build`: passed. Existing vm-browserify/eval, loaders.gl, mixed-export and large-chunk warnings remain; no checking was disabled.
+- `node /private/tmp/comp01-smoke.cjs`: passed with real Chrome and the pf uploads. Verified 5,815/5,815 mapped, live OpenFreeMap sources/attribution, actual rendered-marker hover, categorical reshuffle and numeric mean colours, camera preservation, an 11-tip clade matching the table, single-tip/all-sample selection, wheel/drag navigation, collapse/reopen, downward layout and 390px mobile width. Forced tile failures still render points. A two-tip ±179° synthetic upload renders both points around a 180° camera centre. Zero page errors. Test polling waits for layers to exist during style changes; earlier unguarded diagnostic queries themselves raised MapLibre layer errors and were corrected.
+- `node /private/tmp/vis01-smoke.cjs`: existing small-fixture regression suite passed, including tree/metadata interaction, SVG/PNG exports, reload and legacy HTTP compatibility; zero page errors.
+- `node /private/tmp/vis01-smoke.cjs --large`: 2,399,238-tip compressed fixture passed using Chrome's default heap; import 23,822 ms, warm density updates 17–42 ms, aggregate tooltips and repeated orientation changes passed, zero page errors. The deferred META-02 manual table-index gate remains separate.
+- Browser artifacts: `/private/tmp/comp01-browser.json`, `/private/tmp/comp01-live.png`, `/private/tmp/comp01-mobile.png`; build/test logs: `/private/tmp/comp01-build.log`, `/private/tmp/comp01-tests.log`.
+
+**Compatibility/limits:** Local-backend capability only; remote API unchanged. Map clicks inspect/zoom and never alter selection. Genotype mode uses labelled neutral points. Tile access requires the network; uploaded metadata is not sent to the tile provider. Coordinate/summary caches are bounded to one active geographic view/field. Wrapped map worlds support antimeridian display while worker counts each sample once. Existing tree exports are unchanged; map export is outside COMP-01.
+
+**Next:** Plan COMP-02 using the documented pf `.dot` fixture. Do not automatically implement it.
+
 
 ## 2026-10-22 — VIS-01 complete
 

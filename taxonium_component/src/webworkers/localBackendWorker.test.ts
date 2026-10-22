@@ -86,6 +86,44 @@ describe("uploaded metadata worker", () => {
       expect(sent.at(-1).data.result.cancelled).toBe(true);
     } finally { clock.mockRestore(); vi.unstubAllGlobals(); }
   });
+  it("coalesces geographic requests, cancels old work and resets indexes on upload", async () => {
+    vi.resetModules();
+    const sent: any[] = [];
+    vi.stubGlobal("postMessage", (message: unknown) => sent.push(message));
+    vi.stubGlobal("onmessage", null);
+    let time = 0;
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => time += 10);
+    try {
+      await import("./localBackendWorker.js");
+      const send = (data: unknown) => (globalThis.onmessage as any)({ data });
+      const nodes = [{ node_id: 0, parent_id: 0, is_tip: false, y: 0 },
+        ...Array.from({ length: 100 }, (_, i) => ({ node_id: i + 1, parent_id: 0, y: i, is_tip: true,
+          meta_Lat: 10, meta_Long: 20, meta_group: i % 2 ? "B" : "A" }))];
+      const upload = (nodes: unknown[]) => send({ type: "upload", data: { filename: "fixture.jsonl", fixture: {
+        nodes, mutations: [], overwrite_config: {},
+      } } });
+      await upload(nodes);
+      const request = { selectedNodeId: null, bounds: [-180, -90, 180, 90], zoom: 0, width: 800, height: 400,
+        colorSpec: { field: "meta_group", kind: "categorical" } };
+      const first = send({ type: "geography", key: "first", request });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await send({ type: "geography", key: "middle", request });
+      await send({ type: "geography", key: "last", request });
+      await first;
+      const responses = sent.filter(message => message.type === "geography");
+      expect(responses.find(message => message.key === "first").data.cancelled).toBe(true);
+      expect(responses.find(message => message.key === "middle").data.cancelled).toBe(true);
+      expect(responses.find(message => message.key === "last").data.points[0].label).toContain("Mode: A");
+      const cancelled = send({ type: "geography", key: "cancel", request });
+      await send({ type: "cancel_geography", key: "cancel" }); await cancelled;
+      expect(sent.at(-1).data.cancelled).toBe(true);
+      const stale = send({ type: "geography", key: "stale", request });
+      await upload(nodes.slice(0, 3)); await stale;
+      expect(sent.filter(message => message.key === "stale").at(-1).data.cancelled).toBe(true);
+      await send({ type: "geography", key: "replacement", request });
+      expect(sent.at(-1).data.mappedCount).toBe(2);
+    } finally { clock.mockRestore(); vi.unstubAllGlobals(); }
+  });
   it("summarizes the complete dataset and renders numeric and categorical density with shared colours", async () => {
     vi.resetModules();
     const sent: any[] = [];

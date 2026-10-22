@@ -99,6 +99,7 @@
   "dependencies": {
     "@jbrowse/react-linear-genome-view": "^3.1.0",
     "@tailwindcss/postcss": "^4.1.13",
+    "maplibre-gl": "^6.15.0",
     "postcss": "^8.5.6",
     "zod": "^3.25.16"
   }

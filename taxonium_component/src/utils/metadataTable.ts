@@ -54,6 +54,19 @@ export function buildMetadataTableIndex(nodes: Node[]): MetadataTableIndex {
   return { tips: tips.slice(0, tipCount), starts, ends, positions };
 }
 
+/** Shared selected-clade scope for the table and complementary views. */
+export function selectedTipRange(nodes: Node[], index: MetadataTableIndex, selectedNodeId: string | number | null): [number, number] {
+  let start = 0, end = index.tips.length;
+  if (selectedNodeId !== null) {
+    const id = typeof selectedNodeId === "number" ? selectedNodeId : Number(selectedNodeId);
+    const position = index.positions ? index.positions.get(id) : id;
+    if (!Number.isSafeInteger(id) || position === undefined || position < 0 || position >= nodes.length || nodes[position].node_id !== id)
+      throw new Error("Selected node is not in this dataset");
+    start = index.starts[position]; end = index.ends[position];
+  }
+  return [start, end];
+}
+
 export function queryMetadataTablePage(nodes: Node[], index: MetadataTableIndex,
   availableFields: Set<string>, request: MetadataTableRequest): MetadataTablePage {
   if (!Number.isSafeInteger(request.pageIndex) || request.pageIndex < 0) throw new Error("Invalid table page");
@@ -63,14 +76,7 @@ export function queryMetadataTablePage(nodes: Node[], index: MetadataTableIndex,
   // Field projection is restricted to metadata. The configured sample identifier is separate.
   if (typeof request.nameField !== "string" || !request.nameField ||
       ["__proto__", "prototype", "constructor"].includes(request.nameField)) throw new Error("Invalid sample identifier field");
-  let start = 0, end = index.tips.length;
-  if (request.selectedNodeId !== null) {
-    const id = typeof request.selectedNodeId === "number" ? request.selectedNodeId : Number(request.selectedNodeId);
-    const position = index.positions ? index.positions.get(id) : id;
-    if (!Number.isSafeInteger(id) || position === undefined || position < 0 || position >= nodes.length || nodes[position].node_id !== id)
-      throw new Error("Selected node is not in this dataset");
-    start = index.starts[position]; end = index.ends[position];
-  }
+  const [start, end] = selectedTipRange(nodes, index, request.selectedNodeId);
   const total = end - start;
   const pageIndex = Math.min(request.pageIndex, Math.max(0, Math.ceil(total / METADATA_TABLE_PAGE_SIZE) - 1));
   const first = start + pageIndex * METADATA_TABLE_PAGE_SIZE;

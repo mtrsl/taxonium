@@ -61,6 +61,7 @@ export interface MetadataTableData {
 }
 
 export type LocalBackendMessage =
+  | { type: "geography"; key: string; data: import("./geography").GeographicResponse }
   | MetadataTableData
   | StatusData
   | QueryData

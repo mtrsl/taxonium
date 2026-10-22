@@ -1,3 +1,5 @@
+import { buildGeographicIndex, queryGeography } from "../utils/geography";
+import { aggregateColor } from "../utils/metadataAggregate";
 import { buildMetadataTableIndex, queryMetadataTablePage } from "../utils/metadataTable";
 import { buildCategoryIndex, categoryRangeMode } from "../utils/categoricalDensity";
 import { summarizeMetadata, createMetadataColor, numericMetadataValue } from "../utils/metadata";
@@ -14,8 +16,6 @@ import { parser } from "stream-json";
 import { streamValues } from "stream-json/streamers/StreamValues";
 import { Buffer } from "buffer";
 import {
-  interpolateMetadataColor,
-  normalizeNumericValue,
   normalizeMetadataValue,
   TRUE_VALUES,
 } from "../utils/metadataMatrix";
@@ -46,6 +46,8 @@ const cache_helper = {
 
 let processedUploadedData;
 let uploadGeneration = 0;
+let pendingGeography = null;
+let activeGeography = null;
 let pendingDensity = null;
 let activeDensity = null;
 const DENSITY_CANCELLED = Symbol("density cancelled");
@@ -461,30 +463,7 @@ const getMetadataDensity = async ({
               sourceHeight - 1
             )
           : 0;
-      const totalCount = sourceHeight > 0 ? totalCounts[sourceRow] : 0;
-      let fillColor;
-      if (totalCount === 0) {
-        fillColor = [0, 0, 0, 0];
-      } else if (kind === "categorical" && valueColor) {
-        fillColor = [...valueColor(categoryValues[sourceRow]), 255];
-      } else if (kind === "numeric" && valueColor) {
-        fillColor = [...valueColor(valueCounts[sourceRow] ? valueSums[sourceRow] / valueCounts[sourceRow] : null), 255];
-      } else if (kind === "numeric" && valueSums && valueCounts) {
-        const mean = valueSums[sourceRow] / valueCounts[sourceRow];
-        const clampedFraction = normalizeNumericValue(mean);
-        fillColor = [...interpolateMetadataColor(
-          [244, 244, 244],
-          color,
-          clampedFraction
-        ), 255];
-      } else {
-        fillColor = [
-          color[0],
-          color[1],
-          color[2],
-          Math.round(((trueCounts?.[sourceRow] ?? 0) / totalCount) * 255),
-        ];
-      }
+      const fillColor = aggregateColor(fieldResult, sourceRow, color, valueColor);
 
       for (let x = xStart; x < xEnd; x++) {
         const pixelOffset = (rowIndex * width + x) * 4;
@@ -626,6 +605,39 @@ onmessage = async (event) => {
         processedUploadedData.mutations
       );
       postMessage({ type: "nextstrain", data: result });
+    }
+    if (data.type === "cancel_geography") {
+      if (activeGeography?.key === data.key) activeGeography.cancelled = true;
+      if (pendingGeography?.key === data.key) pendingGeography = null;
+    }
+    if (data.type === "geography") {
+      if (pendingGeography) postMessage({ type: "geography", key: pendingGeography.key, data: { cancelled: true } });
+      pendingGeography = { ...data, generation: uploadGeneration };
+      if (activeGeography) { activeGeography.cancelled = true; return; }
+      while (pendingGeography) {
+        const task = pendingGeography; pendingGeography = null; activeGeography = task;
+        let lastYield = performance.now();
+        const checkpoint = async () => {
+          if (task.cancelled || task.generation !== uploadGeneration) throw DENSITY_CANCELLED;
+          if (performance.now() - lastYield >= 8) {
+            await yieldToMessages(); lastYield = performance.now();
+            if (task.cancelled || task.generation !== uploadGeneration) throw DENSITY_CANCELLED;
+          }
+        };
+        try {
+          await waitForProcessedData(); await checkpoint();
+          const dataset = processedUploadedData;
+          dataset.metadataTableIndex ??= buildMetadataTableIndex(dataset.nodes);
+          dataset.geographicIndex ??= await buildGeographicIndex(dataset.nodes, dataset.metadataTableIndex,
+            Object.keys(dataset.metadataDensityIndex.fieldInfo), checkpoint);
+          const result = await queryGeography(dataset.nodes, dataset.metadataTableIndex, dataset.geographicIndex, task.request, checkpoint);
+          await checkpoint();
+          postMessage({ type: "geography", key: task.key, data: result });
+        } catch (error) {
+          postMessage({ type: "geography", key: task.key, data: error === DENSITY_CANCELLED ? { cancelled: true } :
+            { error: error.message ?? "Unable to load map" } });
+        } finally { activeGeography = null; }
+      }
     }
     if (data.type === "metadata_table") {
       try {
