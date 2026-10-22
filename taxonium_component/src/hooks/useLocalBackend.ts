@@ -1,4 +1,5 @@
 import type { GeographicRequest, GeographicResponse } from "../types/geography";
+import type { EmbeddingRequest, EmbeddingResponse } from "../types/embedding";
 import type { MetadataTableRequest, MetadataTableResponse } from "../types/metadataTable";
 import { useCallback, useMemo, useLayoutEffect, useState } from "react";
 import type {
@@ -44,6 +45,7 @@ let onStatusReceipt: (receivedData: StatusData) => void = (receivedData) => {
 let onConfigReceipt: (receivedData: Config) => void = () => {};
 const detailsSetters = new Map<string, (data: NodeDetails) => void>();
 const geographicSetters = new Map<string, (data: GeographicResponse) => void>();
+const embeddingSetters = new Map<string, (data: EmbeddingResponse) => void>();
 const tableSetters = new Map<string, (data: MetadataTableResponse) => void>();
 let onListReceipt: (receivedData: ListData["data"]) => void = () => {};
 let onNextStrainReceipt: (receivedData: NextStrainData["data"]) => void = (
@@ -106,6 +108,10 @@ worker.onmessage = (event: MessageEvent<LocalBackendMessage>) => {
       geographicSetters.get(data.key)?.(data.data);
       geographicSetters.delete(data.key);
       break;
+    case "embedding":
+      embeddingSetters.get(data.key)?.(data.data);
+      embeddingSetters.delete(data.key);
+      break;
     case "metadata_table":
       tableSetters.get(data.key)?.(data.data);
       tableSetters.delete(data.key);
@@ -148,6 +154,7 @@ function useLocalBackend(
     detailsSetters.clear();
     tableSetters.clear();
     geographicSetters.clear();
+    embeddingSetters.clear();
     metadataDensitySetters = {};
     visibleTipCountSetters = {};
     worker.postMessage({
@@ -235,6 +242,20 @@ function useLocalBackend(
     geographicSetters.set(key, result => { clearTimeout(timer); callback(result); });
     worker.postMessage({ type: "geography", key, request });
     return () => { clearTimeout(timer); geographicSetters.delete(key); worker.postMessage({ type: "cancel_geography", key }); };
+  }, [uploaded_data]);
+
+  const queryEmbedding = useCallback((request: EmbeddingRequest,
+    callback: (response: EmbeddingResponse) => void) => {
+    const key = String(++densityRequestId);
+    const timer = setTimeout(() => {
+      if (!embeddingSetters.has(key)) return;
+      embeddingSetters.delete(key);
+      worker.postMessage({ type: "cancel_embedding", key });
+      callback({ error: "Embedding request timed out. Please retry." });
+    }, 60000);
+    embeddingSetters.set(key, result => { clearTimeout(timer); callback(result); });
+    worker.postMessage({ type: "embedding", key, request });
+    return () => { clearTimeout(timer); embeddingSetters.delete(key); worker.postMessage({ type: "cancel_embedding", key }); };
   }, [uploaded_data]);
 
   const queryMetadataTable = useCallback((request: MetadataTableRequest,
@@ -342,6 +363,7 @@ function useLocalBackend(
       getTipAtts,
       queryMetadataTable,
       queryGeography,
+      queryEmbedding,
       queryMetadataDensity,
       queryVisibleTipCount,
       getNextstrainJson,
@@ -357,6 +379,7 @@ function useLocalBackend(
     getTipAtts,
     queryMetadataTable,
     queryGeography,
+    queryEmbedding,
     queryMetadataDensity,
     queryVisibleTipCount,
     getNextstrainJson,

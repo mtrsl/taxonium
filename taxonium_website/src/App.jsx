@@ -288,7 +288,7 @@ function App() {
           (uploadedData &&
             (uploadedData.status === "loaded" ||
               uploadedData.status === "url_supplied")) ? (
-            <div className="h-[calc(100%-4rem)]">
+            <div className="flex-1 min-h-0">
               <TaxoniumBit
                 sourceData={uploadedData}
                 query={query}

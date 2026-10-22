@@ -9,31 +9,40 @@ Do not automatically begin Next Task or other backlog items.
 # Current Status
 
 **Phase:** Complementary visualisations
-**Status:** COMP-01 complete. VIS-01 and META-01–04 remain complete.
+**Status:** COMP-02 and its unified bottom-panel extension are complete. COMP-01, VIS-01 and META-01–04 remain complete.
 
-The geographic map follows selected samples/clades below the tree and shares metadata-column aggregation, colours and tooltips. MapLibre provides zoom/pan and OpenFreeMap Liberty provides the basemap with attribution; tile failures retain the sample layer on a plain background. All 5,815 pf samples map correctly after fixing shared CSV parsing of quoted commas. COMP-02 fixtures are documented but its implementation has not started.
+Metadata table, Map and Embedding now share one resizable Data views disclosure, initially expanded on Metadata table. URL-backed `bottomView` selects the tab. Rendering resources are recreated on activation while table choices, paging, scroll position and spatial cameras persist. Embedding controls use application button styling and count readouts are removed; internal diagnostics and sample/aggregate tooltips remain. The viewer uses the available host height, with tree-container measurements tracking layout changes.
 
-Validation passed: type checking, 62 tests, the separately enabled million-sample benchmark, component/website builds, full map browser interactions, and existing small/2,399,238-tip browser regressions. Component builds use the established 16 GiB Node heap setting; existing bundler warnings remain. No COMP-01 blockers.
+Type checking, 78 tests and component/website builds pass. Real-fixture Chrome checks pass for both orientations, options visibility, short/narrow windows, state retention, GPU/hover picking and URL defaults. Existing bundler warnings remain. Worker processing is unchanged by this extension; performance benchmarks are not repeated.
 
 # Current Task
 
-## COMP-01 — Geographic map
+## COMP-02 — Unified bottom panel and embedding fixes
 
-Completed the approved worker-backed MapLibre map below the tree and above the metadata table. It follows tree selection and reuses metadata colours, aggregate summaries and tooltip formatting.
+Extend the completed optional DOT embedding work with a unified Metadata table · Map · Embedding bottom panel. Preserve shared selection and metadata colours, retain inactive view state, cancel inactive queries, repair embedding rendering after tab switches and fill the remaining viewer area. The original upload/parser/worker work remains complete.
 
 ### Checklist
 
-- [x] Add coordinate detection, shared selection/aggregation and cancellable worker geographic queries.
-- [x] Add responsive map panel, OpenFreeMap basemap, hover, fitting and lifecycle handling.
-- [x] Validate pf fixtures, edge cases, million-sample performance and existing functionality.
-- [x] Run types, tests, component/website builds and browser checks.
-- [x] Record decisions, results, status and handoff.
+- [x] Accept an optional DOT attachment for supported tree uploads and parse coordinates robustly in the local worker.
+- [x] Extract shared spatial grouping and metadata summary/rendering operations while retaining geographic and Cartesian adapters.
+- [x] Add cancellable bounded local embedding queries and a responsive DeckGL Embedding tab beside Map.
+- [x] Validate fixtures, parser edge cases, upload variants, browser interactions, performance and existing spatial/tree behavior.
+- [x] Run types, relevant tests, component/website builds and browser checks; record results accurately.
+- [x] Record decisions, blockers, status and handoff.
+
+### Approved extension
+
+- [x] Combine Metadata table, Map and Embedding in an expanded Data views disclosure with shared resizing and a 300px default capped at half the viewer.
+- [x] Replace spatialView with URL-backed bottomView; default to Metadata table and disable unavailable embedding.
+- [x] Retain table/camera state, cancel inactive queries and reset dataset-specific state on replacement.
+- [x] Reproduce and fix embedding disappearance; style controls and remove embedding count readouts.
+- [x] Fill remaining viewer space and validate both orientations, options visibility and narrow/short windows.
+- [x] Complete component tests, real-fixture rendering/picking checks, types, full tests and both builds.
+- [x] Record final status, decisions, validation and handoff.
 
 # Next Task
 
-## COMP-02 — `.dot` spatial visualisation
-
-Plan COMP-02 after COMP-01. Do not automatically start it.
+Await user prioritisation after COMP-02; do not automatically start another backlog task.
 
 ---
 
@@ -69,7 +78,7 @@ Test fixtures (paths relative to `taxonium_component/`):
 | Tree and metadata | Tips | Coverage |
 | --- | ---: | --- |
 | `../pf.tree.nwk` + `../pf.metadata.csv` | 5,815 | Matching unique IDs; all valid `Lat`/`Long` pairs, 75 locations, 28 countries; COMP-01 GPS/overlap/selection/colour coverage |
-| `../pf.embedding.dot` with the pf tree/CSV | 5,815 | Matching nodes with finite separate `x`/`y` attributes, no edges; reserved for COMP-02 |
+| `../pf.embedding.dot` with the pf tree/CSV | 5,815 | Matching nodes with finite separate `x`/`y` attributes, no edges; all 5,815 matched and checked in the embedding browser flow |
 | `../tree_small.nwk` + `../metadata_small.csv` | 1,508 | Routine browser checks; `Cluster__autocolour`, `BAPS1__autocolour`, `BAPS2__autocolour` |
 | `../ATB_tree_batch2_cleaned.nwk.gz` + `../has_capsule_all.csv.gz` | 2,399,238 (verified) | Compressed uploads and large-tree performance; taxonomy, capsule flags and capsule counts |
 
@@ -343,15 +352,21 @@ The project is complete when:
 - [x] Metadata legend supports large numbers of categories.
 - [x] Metadata interaction and large-tree density rendering improvements are implemented.
 - [x] Rotated tree and metadata layout is implemented.
-- [ ] Geographic MapLibre component is implemented.
-- [ ] `.dot` spatial visualisation is implemented.
-- [ ] All relevant validation passes.
-- [ ] Cross-component selection and colouring are consistent.
-- [ ] `plan.md` reflects the final implementation state.
+- [x] Geographic MapLibre component is implemented.
+- [x] `.dot` spatial visualisation is implemented.
+- [x] All relevant validation passes.
+- [x] Cross-component selection and colouring are consistent.
+- [x] `plan.md` reflects the final implementation state.
 
 ---
 
 # Design Notes
+
+## 2026-10-22 — COMP-02 approved extension
+
+Metadata table is the default expanded bottom view. A single Data views disclosure owns expansion and resizing; tabs use only `bottomView=metadata|map|embedding`. Remove `spatialView` without migration. Intentionally replace the two separate panels and remove embedding count readouts while retaining internal diagnostics and sample/aggregate tooltips. Keep view state mounted separately from active rendering resources; only the expanded active view queries. No worker-processing changes are planned.
+
+DeckGL finalizes layers when its canvas unmounts. The previous parent retained its memoized ScatterplotLayer across that teardown; repeated switches reproduced missing GPU picks with 117 groups still in data and a valid 1440x400 viewport. Rendering resources now belong to the mounted canvas; camera/data belong to the persistent view. A lifecycle regression test rejects finalized layer reuse and obsolete callbacks. Table measurements and scroll events ignore hidden zero-size containers; browser validation also checks restored DOM scroll offsets. The website host now uses remaining flex height, and the tree no longer reserves a fixed 320px minimum. A ResizeObserver measures the tree container directly instead of relying solely on DeckGL resize callback timing. Browser assertions follow the current React root and await URL-backed tab activation, avoiding stale-render measurements.
 
 ## 2026-10-22 — COMP-01 approved design and implementation
 
@@ -360,6 +375,17 @@ Map below tree, above table; follow tree selection only. Reuse metadata-column b
 Use one cached geographic geometry and active metadata summary/index per dataset. Columns and maps share category counting/ties, aggregate RGBA rendering, tooltip formatting and selected-tip intervals; only spatial group membership differs. MapLibre and its worker source load lazily, with a blob worker URL for portable library embedding. Polar coordinates retain validity but clamp for Mercator projection.
 
 The pf fixture exposed quoted-comma CSV corruption in 11 Peru site names. Fixing the shared importer is a directly necessary COMP-01 dependency and intentionally corrects those metadata values everywhere. The parser preserves quoted commas, escaped quotes and multiline CSV fields.
+
+
+## 2026-10-22 — COMP-02 implementation
+
+The panel arrangement and initial tab described here are superseded by the approved extension above. Parser, worker and upload decisions remain applicable.
+
+**Decision:** Treat DOT as an optional local attachment to one Newick, Nexus, Nextstrain JSON or Taxonium JSONL tree. Keep URL attachments in `embeddingUrl`; accept `.dot` and `.dot.gz`, including URLs with query strings. Standalone JSONL still auto-launches. Remote server APIs remain unchanged.
+
+The worker uses a yielding tokenizer and coordinate-focused DOT parser. It decodes quoted identifiers, skips comments and edge statements, descends into subgraphs, merges repeated node declarations/attribute lists in order, prefers a complete explicit `x`/`y` pair and otherwise uses `pos`. It matches decoded names exactly, assigns duplicate tip names to every matching tip, and reports invalid coordinate records and unmatched identifiers. The parser follows DOT graph syntax and the documented `pos` coordinate format ([DOT language](https://graphviz.org/doc/info/lang.html), [pos attribute](https://graphviz.org/docs/attrs/pos/)). Coordinates receive one uniform normalization factor to preserve their relative geometry and aspect ratio.
+
+Extracted shared selected-tip grouping, metadata summaries, colour rendering and tooltips into the spatial aggregation path. Geography retains wrapping/projection adapters; embedding uses Cartesian coordinates. DeckGL renders points with an orthographic view using bottom-left Cartesian orientation (`flipY: false`); no layout or edge rendering is performed. Worker indexes use compact coordinate arrays, cooperative cancellation and one latest request; marker grouping targets 32 pixels and caps output at 4,096 markers. The tab persists as `spatialView=map|embedding`, defaults to Embedding when a DOT file is supplied, and retains each view's camera while suspending inactive view queries.
 
 
 ## 2026-10-22 — VIS-01 rendering and interaction findings
@@ -479,7 +505,7 @@ Use the following format:
 
 # Blockers
 
-None currently recorded.
+None for COMP-01, COMP-02 or the unified bottom-panel extension. URL, gzip, malformed-DOT and dataset-replacement paths were validated. The pending META-02 manual large-table check remains separate and is not an implementation blocker.
 
 Pending user validation (META-02, not an implementation blocker): manually check index construction, memory and interaction latency on the one-million-tip dataset. This was excluded from automated testing by request.
 
@@ -495,6 +521,48 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 ---
 
 # Session Log
+
+## 2026-10-22 — COMP-02 unified bottom-panel extension complete
+
+**Completed:**
+- Reopened COMP-02 before implementation and preserved its original completed checklist.
+- Added one Data views disclosure with Metadata table, Map and Embedding tabs, defaulting to expanded Metadata table. Reused the pointer/keyboard resize handle; the 300px preferred height is capped at half the viewer and retained across tabs/collapse.
+- Replaced application `spatialView` state/types with `bottomView`; absent, invalid and unavailable embedding values fall back to Metadata table. Embedding is disabled without a DOT attachment, and Map retains its no-coordinate message.
+- Kept table columns/paging/scroll and spatial cameras mounted independently of rendering resources. Inactive requests cancel; hidden selection changes reset paging/fit, and dataset replacement resets view-specific state and rejects late replies.
+- Scoped DeckGL layers/views to the active canvas lifetime, guarded callbacks after teardown, ignored zero-sized measurements, styled embedding controls and removed count readouts while preserving internal diagnostics and tooltips.
+- Removed independent fixed spatial heights, fixed the tree/host flex sizing and measured the tree container with ResizeObserver. The only new website source change in this extension is its viewer wrapper.
+
+**Validation:**
+- `npm run check-types`: passed, zero errors.
+- `npm test -- --run`: 78 tests passed across 21 test files; two opt-in performance benchmark files were skipped. Worker processing was unchanged by this extension, so benchmarks were not repeated.
+- `NODE_OPTIONS=--max-old-space-size=16384 npm run build`: component passed (final build 21.66s). Existing third-party/eval/mixed-export warnings remain.
+- Website `npm run build`: passed against the final component (5.58s); existing eval and chunk-size warnings remain.
+- Chrome with `pf.tree.nwk`, `pf.metadata.csv` and `pf.embedding.dot`: 5,815 internal embedding matches, 5,815 mapped samples and 5,815 table samples. Six repeated Metadata table → Embedding → Map → Embedding cycles passed actual GPU picking and visible hover-label assertions. Camera retention, paging/column/scroll retention, hidden-selection fitting, selected table/map/embedding parity, colour reshuffling, styled controls, removed count readouts, collapse/reopen and pointer/keyboard resizing passed.
+- Both orientations × options shown/hidden × 1440×1100, 390×844, 900×480 and 390×480 passed canvas-size, available-space, half-height-cap and embedding-picking checks. The tree grows when the bottom section collapses. Screenshots were inspected at desktop and narrow/short sizes.
+- URL-backed Embedding and Map re-upload flows restore the requested tab. Invalid `bottomView` and Embedding without DOT fall back to Metadata table; the unavailable Embedding tab is disabled. Zero page errors in the final run.
+- Regression tests cover shared accessible tabs/disclosure, default/fallback selection, inactive cancellation, retained height/table state, hidden-selection resets, dataset replacement, finalized-layer reuse and stale rendering/query callbacks.
+- Initial transitional type errors were corrected as the existing tests moved to the shared panel. Browser harness fixes wait for URL-driven tab activation, inspect React's current root, compare the actual GPU-picked aggregate label, and allow the valid single aggregate marker in very short views. Final assertions pass without weakening the relevant behavior checks.
+- `git diff --check`: passed. Browser script/log and screenshots are under `/private/tmp/comp02-repro.cjs`, `/private/tmp/comp02-extension-browser.log` and `/private/tmp/comp02-extension-*.png`.
+
+**Blockers/unresolved:** No extension blockers. Existing build warnings and the separately documented META-02 manual million-tip table-index check remain unchanged.
+
+**Next:** Await user prioritisation; do not automatically begin another task.
+
+## 2026-10-22 — COMP-02 complete
+
+**Completed:** Added optional `.dot` and `.dot.gz` attachments to local Newick, Nexus, Nextstrain JSON and Taxonium JSONL imports, with file/URL handling and standalone JSONL auto-launch preserved. Added a coordinate-only worker parser/index/query, shared spatial aggregation and accessible Map/Embedding tabs. The embedding uses DeckGL scatter markers, the shared selected-tip scope and metadata colours/tooltips, an orthographic camera, URL-persisted tab state, fit/zoom/pan, aggregate hover/click behavior and camera retention. Malformed and zero-match embeddings show an accessible error while leaving tree, map and metadata-table use available. No remote API or tree-export changes.
+
+**Fixture and browser evidence:** `../pf.tree.nwk` + `../pf.metadata.csv` + `../pf.embedding.dot` produced 5,815/5,815 matched embedding samples (0 invalid records, 0 unmatched IDs); the map still reports 5,815/5,815 mapped. `/private/tmp/comp02-smoke.cjs` passed in Chrome: default Embedding tab, real Deck picking/tooltip on a positive-y point, zoom/pan, map and embedding camera retention, collapse/reopen, categorical recolouring with camera preservation, 11-tip selection parity with the table, both tree orientations, narrow viewport, reversed file order with gzip, malformed-DOT recovery and map availability. `/private/tmp/comp02-smoke.cjs url` passed with tree, metadata and DOT loaded from URLs; query-string extensions were recognized. No page errors.
+
+**Automated validation:** `npm run check-types` passed with zero TypeScript errors. `npm test -- --run` passed 74 tests across 19 files; two opt-in benchmark tests were skipped in that run. Parser and worker tests cover separate `x`/`y`, `pos`, comments, repeated declarations/lists, subgraphs, escaped/quoted IDs, leading zeros, duplicate tip names, invalid/missing coordinates, unmatched identifiers, coincident points, degenerate bounds, malformed DOT, gzip URLs and Newick/Nexus/Nextstrain/JSONL attachments. The panel also checks an accessible alert for zero matched coordinates. `git diff --check` passed.
+
+**Million-sample embedding benchmark:** `RUN_EMBEDDING_BENCHMARK=1 npm test -- --run src/utils/embedding.benchmark.test.ts` passed for coincident and dispersed coordinates. Coincident: parse/index 3,971 ms, query 94 ms, cached recolour 1.55 ms, 1 marker, 199-byte response, 30.5 MiB retained typed arrays, 587 MiB process heap and 282 cooperative yields. Dispersed: parse/index 4,510 ms, query 114 ms, cached recolour 0.66 ms, 1,251 markers, 172,370-byte response, 30.5 MiB retained typed arrays, 1,230 MiB process heap and 422 cooperative yields. Both recorded two cancellation checkpoints.
+
+**Builds:** `NODE_OPTIONS=--max-old-space-size=16384 npm run build` passed for the component. Website `npm run build` passed. Existing warnings remain: component `eval`, missing `spawn` stub export, mixed default/named exports and large chunks; the website reports the component `eval` and chunks over 500 kB.
+
+**Blockers/unresolved:** None for COMP-02. The separately documented META-02 manual million-tip table-index check remains pending user validation.
+
+**Next:** Await user prioritisation. Do not automatically begin another task.
 
 ## 2026-10-22 — COMP-01 complete
 
@@ -521,7 +589,7 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 
 **Compatibility/limits:** Local-backend capability only; remote API unchanged. Map clicks inspect/zoom and never alter selection. Genotype mode uses labelled neutral points. Tile access requires the network; uploaded metadata is not sent to the tile provider. Coordinate/summary caches are bounded to one active geographic view/field. Wrapped map worlds support antimeridian display while worker counts each sample once. Existing tree exports are unchanged; map export is outside COMP-01.
 
-**Next:** Plan COMP-02 using the documented pf `.dot` fixture. Do not automatically implement it.
+**Next:** COMP-02 was planned and completed in the 2026-10-22 session above.
 
 
 ## 2026-10-22 — VIS-01 complete

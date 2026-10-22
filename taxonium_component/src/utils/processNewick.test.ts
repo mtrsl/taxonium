@@ -1,5 +1,7 @@
-import { expect, it } from "vitest";
-import { processNewickAndMetadata, processNewick, processMetadataFile } from "./processNewick";
+import axios from "axios";
+import pako from "pako";
+import { expect, it, vi } from "vitest";
+import { fetch_or_extract, processNewickAndMetadata, processNewick, processMetadataFile } from "./processNewick";
 
 it("preserves uploaded columns, embedded metadata, duplicate identifiers and blank defaults", async () => {
   const fields = Array.from({ length: 24 }, (_, i) => `f${i}`);
@@ -26,4 +28,19 @@ it("keeps GPS columns aligned after quoted CSV fields, escaped quotes and multil
   expect(rows.get("a")).toEqual({ meta_Site: "Iquitos, Loreto Province", meta_Lat: "-3.763541", meta_Long: "-73.267937" });
   expect(rows.get("b")).toEqual({ meta_Site: 'A "quoted"\nsite', meta_Lat: "0", meta_Long: "0" });
   expect(rows.get("c")?.meta_Long).toBe("20");
+});
+
+it("loads gzip DOT coordinates from files and URLs with query strings", async () => {
+  const source = `graph { "FP0001"[pos="1,2!"]; }`;
+  const compressed = pako.gzip(source).slice().buffer as ArrayBuffer;
+  const file = await fetch_or_extract({ filename: "coords.dot.gz", status: "loaded", data: compressed }, () => {}, "DOT embedding");
+  expect(file).toBe(source);
+
+  const url = "https://example.test/coords.dot.gz?download=1";
+  const request = vi.spyOn(axios, "get").mockResolvedValue({ data: compressed } as never);
+  try {
+    const downloaded = await fetch_or_extract({ filename: url, status: "url_supplied" }, () => {}, "DOT embedding");
+    expect(downloaded).toBe(source);
+    expect(request).toHaveBeenCalledWith(url, expect.objectContaining({ responseType: "arraybuffer" }));
+  } finally { request.mockRestore(); }
 });

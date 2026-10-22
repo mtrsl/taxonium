@@ -25,7 +25,7 @@ async function do_fetch(
 ): Promise<string> {
   // send progress on downloadProgress
 
-  if (url.endsWith(".gz")) {
+  if (/\.gz(?:[?#].*)?$/i.test(url)) {
     const response = await axios.get(url, {
       responseType: "arraybuffer",
       onDownloadProgress: (progress) => {
@@ -56,7 +56,7 @@ async function do_fetch(
   }
 }
 
-async function fetch_or_extract(
+export async function fetch_or_extract(
   file_obj: InputFile,
   sendStatusMessage: (msg: StatusMessage) => void,
   whatIsBeingDownloaded: string
@@ -64,7 +64,7 @@ async function fetch_or_extract(
   if (file_obj.status === "url_supplied") {
     return do_fetch(file_obj.filename, sendStatusMessage, whatIsBeingDownloaded);
   } else if (file_obj.status === "loaded") {
-    if (file_obj.filename.includes(".gz")) {
+    if (/\.gz(?:[?#].*)?$/i.test(file_obj.filename)) {
       const compressed_data = file_obj.data as ArrayBuffer;
       sendStatusMessage({
         message: "Decompressing compressed " + whatIsBeingDownloaded,

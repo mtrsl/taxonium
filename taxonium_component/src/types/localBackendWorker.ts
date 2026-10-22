@@ -60,8 +60,15 @@ export interface MetadataTableData {
   data: import("./metadataTable").MetadataTableResponse;
 }
 
+export interface EmbeddingData {
+  type: "embedding";
+  key: string;
+  data: import("./embedding").EmbeddingResponse;
+}
+
 export type LocalBackendMessage =
   | { type: "geography"; key: string; data: import("./geography").GeographicResponse }
+  | EmbeddingData
   | MetadataTableData
   | StatusData
   | QueryData

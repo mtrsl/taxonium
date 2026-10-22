@@ -51,6 +51,7 @@ export interface Config {
     colorByOptions: string[];
   };
   metadataSummaries?: Record<string, MetadataSummary>;
+  embeddingDiagnostics?: import("./embedding").EmbeddingDiagnostics;
   metadataFields?: Record<string, MetadataFieldInfo>;
   search_types?: SearchType[];
   overlay?: React.ReactNode;
@@ -206,6 +207,7 @@ export interface ServerBackend extends BaseBackend {
 
 export interface LocalBackend extends BaseBackend {
   queryGeography?: (request: import("./geography").GeographicRequest, callback: (response: import("./geography").GeographicResponse) => void) => () => void;
+  queryEmbedding?: (request: import("./embedding").EmbeddingRequest, callback: (response: import("./embedding").EmbeddingResponse) => void) => () => void;
   queryMetadataTable?: (request: MetadataTableRequest, callback: (response: MetadataTableResponse) => void) => () => void;
   type: "local";
   backend_url?: undefined;

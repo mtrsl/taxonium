@@ -4,6 +4,10 @@ export interface InputFile {
   data?: ArrayBuffer | string;
 }
 
+export interface EmbeddingFile extends InputFile {
+  filetype?: "dot";
+}
+
 export interface MetadataFile extends InputFile {
   filetype: "meta_tsv" | "meta_csv";
   taxonColumn?: string;
@@ -14,6 +18,8 @@ export interface NewickFile extends InputFile {
   ladderize?: boolean;
   useDistances?: boolean;
   metadata?: MetadataFile;
+  embedding?: EmbeddingFile;
+  embeddingUrl?: string;
   taxonColumn?: string;
 }
 

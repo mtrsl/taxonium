@@ -1,6 +1,8 @@
 export interface Query {
   /** Tree orientation; unknown values use standard layout. */
   treeLayout?: "standard" | "rotated";
+  /** Active local bottom view; defaults to metadata. */
+  bottomView?: "metadata" | "map" | "embedding";
   /** JSON string of search specifications */
   srch?: string;
   /** JSON string mapping search keys to enabled flag */
@@ -25,6 +27,8 @@ export interface Query {
   config?: string;
   /** URL to fetch config from */
   configUrl?: string;
+  /** Optional DOT coordinate attachment for local tree or Taxonium JSONL uploads. */
+  embeddingUrl?: string;
   /** Index of search to zoom to on load */
   zoomToSearch?: number;
   [key: string]: unknown;

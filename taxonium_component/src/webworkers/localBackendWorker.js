@@ -1,4 +1,6 @@
 import { buildGeographicIndex, queryGeography } from "../utils/geography";
+import { buildEmbeddingIndex, queryEmbedding } from "../utils/embedding";
+import { fetch_or_extract } from "../utils/processNewick";
 import { aggregateColor } from "../utils/metadataAggregate";
 import { buildMetadataTableIndex, queryMetadataTablePage } from "../utils/metadataTable";
 import { buildCategoryIndex, categoryRangeMode } from "../utils/categoricalDensity";
@@ -48,6 +50,8 @@ let processedUploadedData;
 let uploadGeneration = 0;
 let pendingGeography = null;
 let activeGeography = null;
+let pendingEmbedding = null;
+let activeEmbedding = null;
 let pendingDensity = null;
 let activeDensity = null;
 const DENSITY_CANCELLED = Symbol("density cancelled");
@@ -258,6 +262,9 @@ const getConfig = async () => {
     metadataFields: {},
     ...processedUploadedData.overwrite_config,
     metadataSummaries: processedUploadedData.metadataDensityIndex?.fieldInfo ?? {},
+    embeddingDiagnostics: processedUploadedData.embeddingDiagnostics ?? {
+      supplied: false, available: false, matchedSamples: 0, invalidCoordinateRecords: 0, unmatchedIdentifiers: 0,
+    },
   };
 
 
@@ -512,12 +519,57 @@ const getVisibleTipCount = async ({ minY, maxY }) => {
   };
 };
 
+const attachEmbedding = async (upload, dataset, generation) => {
+  const input = upload.embedding ?? (upload.embeddingUrl ? {
+    status: "url_supplied", filename: upload.embeddingUrl, filetype: "dot",
+  } : null);
+  dataset.embeddingDiagnostics = {
+    supplied: !!input, available: false, matchedSamples: 0,
+    invalidCoordinateRecords: 0, unmatchedIdentifiers: 0,
+  };
+  if (!input) return;
+  try {
+    sendStatusMessage({ message: "Parsing DOT embedding" });
+    const source = await fetch_or_extract(input, sendStatusMessage, "DOT embedding");
+    if (generation !== uploadGeneration) return;
+    const config = {};
+    generateConfig(config, dataset);
+    const nameField = config.name_accessor ?? dataset.overwrite_config?.name_accessor ?? "name";
+    const tips = buildMetadataTableIndex(dataset.nodes);
+    let lastYield = performance.now();
+    const checkpoint = async () => {
+      if (generation !== uploadGeneration) throw DENSITY_CANCELLED;
+      if (performance.now() - lastYield >= 8) {
+        await yieldToMessages();
+        lastYield = performance.now();
+        if (generation !== uploadGeneration) throw DENSITY_CANCELLED;
+      }
+    };
+    const index = await buildEmbeddingIndex(dataset.nodes, tips, source, nameField, checkpoint);
+    if (generation !== uploadGeneration) return;
+    dataset.embeddingIndex = index;
+    dataset.metadataTableIndex = tips;
+    dataset.embeddingDiagnostics = index.diagnostics;
+  } catch (error) {
+    if (generation !== uploadGeneration || error === DENSITY_CANCELLED) return;
+    dataset.embeddingDiagnostics = {
+      supplied: true, available: false, matchedSamples: 0,
+      invalidCoordinateRecords: 0, unmatchedIdentifiers: 0,
+      error: error?.message ?? "Unable to parse DOT embedding",
+    };
+  }
+};
+
 onmessage = async (event) => {
   //Process uploaded data:
   const { data } = event;
   if (data.type === "upload" && data.data?.filename) {
     processedUploadedData = undefined;
     uploadGeneration++;
+    if (pendingGeography) postMessage({ type: "geography", key: pendingGeography.key, data: { cancelled: true } });
+    if (activeGeography) activeGeography.cancelled = true;
+    if (pendingEmbedding) postMessage({ type: "embedding", key: pendingEmbedding.key, data: { cancelled: true } });
+    if (activeEmbedding) activeEmbedding.cancelled = true;
   }
   const generation = uploadGeneration;
   if (
@@ -535,10 +587,10 @@ onmessage = async (event) => {
       Buffer
     );
     if (generation !== uploadGeneration) return;
+    uploaded.metadataDensityIndex = createMetadataDensityIndex(uploaded.nodes);
+    await attachEmbedding(data.data, uploaded, generation);
+    if (generation !== uploadGeneration) return;
     processedUploadedData = uploaded;
-    processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
-      processedUploadedData.nodes
-    );
 
   } else if (
     data.type === "upload" &&
@@ -552,10 +604,10 @@ onmessage = async (event) => {
       sendStatusMessage
     );
     if (generation !== uploadGeneration) return;
+    uploaded.metadataDensityIndex = createMetadataDensityIndex(uploaded.nodes);
+    await attachEmbedding(data.data, uploaded, generation);
+    if (generation !== uploadGeneration) return;
     processedUploadedData = uploaded;
-    processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
-      processedUploadedData.nodes
-    );
   } else if (
     data.type === "upload" &&
     data.data &&
@@ -567,10 +619,10 @@ onmessage = async (event) => {
       sendStatusMessage
     );
     if (generation !== uploadGeneration) return;
+    uploaded.metadataDensityIndex = createMetadataDensityIndex(uploaded.nodes);
+    await attachEmbedding(data.data, uploaded, generation);
+    if (generation !== uploadGeneration) return;
     processedUploadedData = uploaded;
-    processedUploadedData.metadataDensityIndex = createMetadataDensityIndex(
-      processedUploadedData.nodes
-    );
   } else if (data.type === "upload" && data.data && data.data.filename) {
     sendStatusMessage({
       error:
@@ -637,6 +689,39 @@ onmessage = async (event) => {
           postMessage({ type: "geography", key: task.key, data: error === DENSITY_CANCELLED ? { cancelled: true } :
             { error: error.message ?? "Unable to load map" } });
         } finally { activeGeography = null; }
+      }
+    }
+    if (data.type === "cancel_embedding") {
+      if (activeEmbedding?.key === data.key) activeEmbedding.cancelled = true;
+      if (pendingEmbedding?.key === data.key) pendingEmbedding = null;
+    }
+    if (data.type === "embedding") {
+      if (pendingEmbedding) postMessage({ type: "embedding", key: pendingEmbedding.key, data: { cancelled: true } });
+      pendingEmbedding = { ...data, generation: uploadGeneration };
+      if (activeEmbedding) { activeEmbedding.cancelled = true; return; }
+      while (pendingEmbedding) {
+        const task = pendingEmbedding; pendingEmbedding = null; activeEmbedding = task;
+        let lastYield = performance.now();
+        const checkpoint = async () => {
+          if (task.cancelled || task.generation !== uploadGeneration) throw DENSITY_CANCELLED;
+          if (performance.now() - lastYield >= 8) {
+            await yieldToMessages(); lastYield = performance.now();
+            if (task.cancelled || task.generation !== uploadGeneration) throw DENSITY_CANCELLED;
+          }
+        };
+        try {
+          await waitForProcessedData(); await checkpoint();
+          const dataset = processedUploadedData;
+          if (!dataset.embeddingIndex) throw new Error(dataset.embeddingDiagnostics?.error ?? "No usable DOT embedding is loaded");
+          dataset.metadataTableIndex ??= buildMetadataTableIndex(dataset.nodes);
+          const result = await queryEmbedding(dataset.nodes, dataset.metadataTableIndex,
+            dataset.embeddingIndex, task.request, checkpoint);
+          await checkpoint();
+          postMessage({ type: "embedding", key: task.key, data: result });
+        } catch (error) {
+          postMessage({ type: "embedding", key: task.key, data: error === DENSITY_CANCELLED ? { cancelled: true } :
+            { error: error.message ?? "Unable to load embedding" } });
+        } finally { activeEmbedding = null; }
       }
     }
     if (data.type === "metadata_table") {

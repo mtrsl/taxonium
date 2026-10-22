@@ -19,6 +19,7 @@ const prettyTypes = {
   meta_tsv: "Metadata TSV",
   meta_csv: "Metadata CSV",
   nextstrain: "Nextstrain JSON",
+  dot: "DOT embedding coordinates",
   unknown: "Unknown (please select)",
 };
 const fileTypes = Object.keys(prettyTypes);
@@ -162,7 +163,7 @@ export const InputSupplier = ({ inputHelper, className }) => {
       )}
       <div className="mb-3">
         Select, drag-and-drop, or enter the URL for tree or metadata files
-        (jsonl, newick, nextstrain, tsv, etc.):
+        (jsonl, newick, nextstrain, dot, tsv, etc.):
       </div>
       {!addingText && (
         <>

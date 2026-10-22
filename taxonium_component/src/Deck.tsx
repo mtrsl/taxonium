@@ -1,7 +1,7 @@
 import { orientPoint } from "./utils/treeLayout";
 import { metadataLegendRamp } from "./utils/metadata";
 /// app.js
-import React, { useState, useCallback, useRef, Suspense, useEffect } from "react";
+import React, { useState, useCallback, useRef, Suspense, useEffect, useLayoutEffect } from "react";
 import DeckGL, { type DeckGLRef } from "@deck.gl/react";
 import { View } from "@deck.gl/core";
 const DeckView = View as unknown as React.ComponentType<Record<string, unknown>>;
@@ -101,6 +101,27 @@ function Deck({
   onNodeSelect,
   onNodeDetailsLoaded,
 }: DeckProps) {
+
+  const container = useRef<HTMLDivElement>(null);
+  const measuredSize = useRef(deckSize);
+  measuredSize.current = deckSize;
+  const measureDeck = useCallback(() => {
+    const element = container.current;
+    if (!element || element.clientWidth <= 0 || element.clientHeight <= 0) return;
+    const width = element.clientWidth, height = element.clientHeight;
+    if (measuredSize.current.width !== width || measuredSize.current.height !== height) {
+      measuredSize.current = { width, height };
+      setDeckSize({ width, height });
+    }
+  }, [setDeckSize]);
+  useLayoutEffect(() => {
+    const element = container.current;
+    if (!element) return;
+    measureDeck();
+    const observer = new ResizeObserver(measureDeck);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [measureDeck]);
 
   const zoomReset = view.zoomReset;
   const snapshot = useSnapshot(deckRef);
@@ -271,6 +292,7 @@ function Deck({
 
   return (
     <div
+      ref={container}
       className="w-full h-full relative"
       onClick={onClickOrMouseMove}
       onPointerMove={onClickOrMouseMove}
@@ -488,17 +510,14 @@ function Deck({
           setMouseXY(info);
           if (!info.object || info.layer?.id.startsWith("metadata-matrix-")) setHoverInfo(null);
         }}
-        onResize={(size) => {
-          setDeckSize(size);
+        onResize={() => {
+          measureDeck();
           window.setTimeout(() => {
             (treenomeState as any).handleResize();
           }, 50);
         }}
-        onAfterRender={(event) => {
-          if (isNaN(deckSize.width)) {
-            const target = (event as any).target as HTMLElement;
-            setDeckSize(target.parentElement!.getBoundingClientRect());
-          }
+        onAfterRender={() => {
+          if (isNaN(deckSize.width)) measureDeck();
         }}
       >
         <DeckView id="browser-axis">

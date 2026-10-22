@@ -15,6 +15,7 @@ interface Props {
   config: Config;
   selectedNodeId: number | string | null;
   metadataMatrix: MetadataMatrix;
+  active: boolean;
 }
 
 function ColumnChooser({ fields, hidden, setHidden, config }: {
@@ -50,7 +51,7 @@ function ColumnChooser({ fields, hidden, setHidden, config }: {
   </details>;
 }
 
-function TableContent({ backend, config, selectedNodeId, metadataMatrix, active }: Props & { active: boolean }) {
+export default function MetadataTablePanel({ backend, config, selectedNodeId, metadataMatrix, active }: Props) {
   const allFields = useMemo(() => Object.keys(config.metadataSummaries ?? {}).sort((a, b) =>
     prettifyName(a, config).localeCompare(prettifyName(b, config))), [config.metadataSummaries, config]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -64,11 +65,20 @@ function TableContent({ backend, config, selectedNodeId, metadataMatrix, active 
   useLayoutEffect(() => {
     const element = scroll.current;
     if (!element) return;
-    const measure = () => setViewport(old => ({ ...old, width: element.clientWidth, height: element.clientHeight }));
+    const measure = () => {
+      if (element.clientWidth > 0 && element.clientHeight > 0)
+        setViewport(old => ({ ...old, width: element.clientWidth, height: element.clientHeight }));
+    };
     measure();
     const observer = new ResizeObserver(measure); observer.observe(element);
     return () => observer.disconnect();
   }, []);
+  useLayoutEffect(() => {
+    if (active && scroll.current) {
+      scroll.current.scrollTop = viewport.top;
+      scroll.current.scrollLeft = viewport.left;
+    }
+  }, [active]);
   useLayoutEffect(() => {
     if (scroll.current) scroll.current.scrollTop = 0;
     setViewport(old => ({ ...old, top: 0 })); setPageInput(String(page + 1));
@@ -129,6 +139,7 @@ function TableContent({ backend, config, selectedNodeId, metadataMatrix, active 
       }}
       onBlur={() => setFocusedValue(null)}
       onScroll={event => {
+        if (!active || !event.currentTarget.clientWidth || !event.currentTarget.clientHeight) return;
         const { scrollTop: top, scrollLeft: left } = event.currentTarget;
         setViewport(old => ({ ...old, top, left })); setFocusedValue(null);
       }}>
@@ -159,44 +170,4 @@ function TableContent({ backend, config, selectedNodeId, metadataMatrix, active 
       {focusedValue.text}
     </div>}
   </>;
-}
-
-export default function MetadataTablePanel(props: Props) {
-  const [open, setOpen] = useState(false);
-  const [height, setHeight] = useState(300);
-  const [maxHeight, setMaxHeight] = useState(500);
-  const panel = useRef<HTMLElement>(null);
-  const drag = useRef<{ y: number; height: number } | null>(null);
-  const [dataset, setDataset] = useState({ query: props.backend.queryMetadataTable, version: 0 });
-  // Recreate dataset-specific choices before displaying a replacement dataset.
-  if (dataset.query !== props.backend.queryMetadataTable) setDataset({ query: props.backend.queryMetadataTable, version: dataset.version + 1 });
-  useLayoutEffect(() => {
-    const parent = panel.current?.parentElement;
-    if (!parent) return;
-    const measure = () => setMaxHeight(Math.max(60, parent.clientHeight / 2));
-    measure(); const observer = new ResizeObserver(measure); observer.observe(parent);
-    return () => observer.disconnect();
-  }, []);
-  const actualHeight = Math.min(height, maxHeight);
-  const minHeight = Math.min(160, maxHeight);
-  const resize = (value: number) => setHeight(Math.min(maxHeight, Math.max(minHeight, value)));
-  return <section ref={panel} aria-label="Metadata table panel" className="shrink-0 border-t bg-white flex flex-col min-h-0" style={{ height: open ? actualHeight : 32 }}>
-    {open && <div role="separator" aria-label="Resize metadata table" aria-orientation="horizontal" tabIndex={0}
-      aria-valuemin={minHeight} aria-valuemax={Math.round(maxHeight)} aria-valuenow={Math.round(actualHeight)}
-      style={{ height: 6, cursor: "row-resize", background: "#d1d5db", flexShrink: 0, touchAction: "none" }}
-      onKeyDown={event => {
-        if (["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
-          event.preventDefault(); resize(event.key === "Home" ? minHeight : event.key === "End" ? maxHeight : actualHeight + (event.key === "ArrowUp" ? 20 : -20));
-        }
-      }}
-      onPointerDown={event => { drag.current = { y: event.clientY, height: actualHeight }; event.currentTarget.setPointerCapture(event.pointerId); }}
-      onPointerMove={event => { if (drag.current) resize(drag.current.height + drag.current.y - event.clientY); }}
-      onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} />}
-    <button type="button" aria-expanded={open} className="text-left px-3 text-sm font-semibold shrink-0" style={{ height: 30 }} onClick={() => setOpen(value => !value)}>
-      {open ? "▾" : "▸"} Metadata table
-    </button>
-    <div className="grow min-h-0 flex-col" style={{ display: open ? "flex" : "none" }}>
-      <TableContent key={dataset.version} {...props} active={open} />
-    </div>
-  </section>;
 }

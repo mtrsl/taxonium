@@ -124,6 +124,78 @@ describe("uploaded metadata worker", () => {
       expect(sent.at(-1).data.mappedCount).toBe(2);
     } finally { clock.mockRestore(); vi.unstubAllGlobals(); }
   });
+
+  it("attaches DOT coordinates to JSONL, reports diagnostics and keeps metadata queries usable on parse errors", async () => {
+    vi.resetModules();
+    const sent: any[] = [];
+    vi.stubGlobal("postMessage", (message: unknown) => sent.push(message));
+    vi.stubGlobal("onmessage", null);
+    try {
+      await import("./localBackendWorker.js");
+      const send = async (data: unknown) => { await (globalThis.onmessage as any)({ data }); return sent.at(-1); };
+      const nodes = [
+        { node_id: 0, parent_id: 0, is_tip: false, mutations: [] },
+        { node_id: 1, parent_id: 0, is_tip: true, mutations: [], name: "A", meta_Lat: "10", meta_Long: "20" },
+        { node_id: 2, parent_id: 0, is_tip: true, mutations: [], name: "A", meta_Lat: "11", meta_Long: "21" },
+        { node_id: 3, parent_id: 0, is_tip: true, mutations: [], name: "a", meta_Lat: "-10", meta_Long: "-20" },
+      ];
+      const upload = (dot: string) => send({ type: "upload", data: {
+        filename: "fixture.jsonl", filetype: "jsonl", fixture: { nodes, mutations: [], node_to_mut: {}, overwrite_config: {} },
+        embedding: { filename: "fixture.dot", filetype: "dot", status: "loaded", data: dot },
+      } });
+      await upload('digraph G { A[x=1,y=2]; a[pos="3,-4!"]; unmatched[x=9,y=9]; }');
+      const config = (await send({ type: "config" })).data;
+      expect(config.embeddingDiagnostics).toMatchObject({ supplied: true, available: true, matchedSamples: 3,
+        invalidCoordinateRecords: 0, unmatchedIdentifiers: 1 });
+      const response = await send({ type: "embedding", key: "embedding-1", request: {
+        selectedNodeId: null, bounds: [-1, -1, 1, 1], width: 400, height: 300,
+      } });
+      expect(response).toMatchObject({ key: "embedding-1", data: { selectedCount: 3, matchedCount: 3 } });
+      expect(response.data.points.map((point: any) => point.count).sort()).toEqual([1, 2]);
+
+      await upload("not a DOT graph");
+      const malformedConfig = (await send({ type: "config" })).data;
+      expect(malformedConfig.embeddingDiagnostics).toMatchObject({ supplied: true, available: false });
+      expect(malformedConfig.embeddingDiagnostics.error).toMatch(/start with graph or digraph/);
+      const table = await send({ type: "metadata_table", key: "still-usable", request: {
+        selectedNodeId: null, pageIndex: 0, fields: ["meta_Lat"], nameField: "name",
+      } });
+      expect(table.data.total).toBe(3);
+      expect(table.data.rows).toHaveLength(3);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("attaches the same DOT coordinates after Newick, Nexus and Nextstrain imports", async () => {
+    vi.resetModules();
+    const sent: any[] = [];
+    vi.stubGlobal("postMessage", (message: unknown) => sent.push(message));
+    vi.stubGlobal("onmessage", null);
+    try {
+      await import("./localBackendWorker.js");
+      const send = async (data: unknown) => { await (globalThis.onmessage as any)({ data }); return sent.at(-1); };
+      const inputs = [
+        { filename: "tree.nwk", filetype: "nwk", data: "(A:1,B:1);" },
+        { filename: "tree.nexus", filetype: "nexus", data: "#NEXUS\nBegin trees;\ntree tree1 = [&R] (A:1,B:1):0;\nEnd;" },
+        { filename: "tree.json", filetype: "nextstrain", data: new TextEncoder().encode(JSON.stringify({ meta: {}, tree: {
+          name: "root", node_attrs: {}, children: [
+            { name: "A", node_attrs: {} }, { name: "B", node_attrs: {} },
+          ],
+        } })).buffer as ArrayBuffer },
+      ];
+      for (const input of inputs) {
+        await send({ type: "upload", data: { ...input, status: "loaded", embedding: {
+          filename: "coordinates.dot", filetype: "dot", status: "loaded", data: `graph { A[x=1,y=2]; B[pos="-3,4!"]; }`,
+        } } });
+        const config = (await send({ type: "config" })).data;
+        expect(config.embeddingDiagnostics).toMatchObject({ supplied: true, available: true, matchedSamples: 2 });
+        const response = await send({ type: "embedding", key: input.filetype, request: {
+          selectedNodeId: null, bounds: [-1, -1, 1, 1], width: 400, height: 300,
+        } });
+        expect(response).toMatchObject({ key: input.filetype, data: { selectedCount: 2, matchedCount: 2 } });
+      }
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it("summarizes the complete dataset and renders numeric and categorical density with shared colours", async () => {
     vi.resetModules();
     const sent: any[] = [];

@@ -1,5 +1,5 @@
-import GeographicMapPanel from "./components/GeographicMapPanel";
-import MetadataTablePanel from "./components/MetadataTablePanel";
+import BottomViewsPanel from "./components/BottomViewsPanel";
+import type { BottomView } from "./components/BottomViewsPanel";
 import useMetadata from "./hooks/useMetadata";
 import React, { useMemo, useState, useRef } from "react";
 import "./App.css";
@@ -288,12 +288,13 @@ function Taxonium({
   const showPlaceSequencesButton = usherProtobuf && referenceGBFF && referenceFasta;
 
   const treenomeState = useTreenomeState(data, deckRef, view, settings);
+  const setBottomView = useCallback((next: BottomView) => updateQuery({ bottomView: next }), [updateQuery]);
 
   return (
     <GlobalErrorBoundary>
       <div
         className="w-full h-full flex flex-col taxonium"
-        style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflowY: "auto" }}
+        style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}
       >
         <div id="taxonium-root" />
         <Toaster />
@@ -306,13 +307,13 @@ function Taxonium({
           textColor="#000"
           effect="solid"
         />
-        <div className="grow min-h-0 overflow-hidden flex flex-col md:flex-row" style={{ minHeight: 320, flexShrink: 0 }}>
+        <div className="grow min-h-0 overflow-hidden flex flex-col md:flex-row" style={{ flex: "1 1 0", minHeight: 0 }}>
           <div
             className={
               sidebarOpen
-                ? "h-1/2 md:h-full w-full 2xl:w-3/4 md:grow" +
+                ? "min-h-0 min-w-0 h-1/2 md:h-full w-full 2xl:w-3/4 md:grow" +
                   (settings.treenomeEnabled ? " md:w-3/4" : " md:w-2/3")
-                : "md:col-span-12 h-5/6 md:h-full w-full"
+                : "min-h-0 min-w-0 grow md:h-full w-full"
             }
           >
             <Deck
@@ -387,10 +388,9 @@ function Taxonium({
             )}
           </div>
         </div>
-        {backend.type === "local" && backend.queryGeography && <GeographicMapPanel backend={backend} config={config}
-          selectedNodeId={selectedDetails.selectedNodeId} field={colorBy.colorByField} metadataMatrix={metadataMatrix} />}
-        {backend.type === "local" && backend.queryMetadataTable && <MetadataTablePanel backend={backend} config={config}
-          selectedNodeId={selectedDetails.selectedNodeId} metadataMatrix={metadataMatrix} />}
+        {backend.type === "local" && backend.queryMetadataTable && <BottomViewsPanel backend={backend} config={config}
+          selectedNodeId={selectedDetails.selectedNodeId} field={colorBy.colorByField} metadataMatrix={metadataMatrix}
+          bottomView={query.bottomView} onBottomViewChange={setBottomView} />}
       </div>
     </GlobalErrorBoundary>
   );

@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import MetadataTablePanel from "./MetadataTablePanel";
+import BottomViewsPanel from "./BottomViewsPanel";
 import type { Config, LocalBackend } from "../types/backend";
 import type { MetadataMatrix } from "../types/metadataMatrix";
 import type { MetadataTableRequest, MetadataTableResponse } from "../types/metadataTable";
@@ -9,7 +9,7 @@ import type { MetadataTableRequest, MetadataTableResponse } from "../types/metad
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("metadata table panel", () => {
-  it("fetches only when expanded, windows wide pages, follows selection and retains session columns", async () => {
+  it("defaults expanded, fetches only when active, windows wide pages, follows selection and retains session columns", async () => {
     vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(900);
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(500);
@@ -31,15 +31,14 @@ describe("metadata table panel", () => {
         })) });
       return vi.fn();
     });
+    let bottomView: "metadata" | "map" = "metadata";
     const render = (selectedNodeId: number | null = null, queryMetadataTable = query) => root.render(
-      <MetadataTablePanel backend={{ queryMetadataTable } as unknown as LocalBackend} config={config}
+      <BottomViewsPanel bottomView={bottomView} field="None" onBottomViewChange={() => {}} backend={{ queryMetadataTable } as unknown as LocalBackend} config={config}
         selectedNodeId={selectedNodeId} metadataMatrix={matrix} />);
     const click = async (label: string) => act(async () => element.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!.click());
     const toggle = async () => act(async () => element.querySelector<HTMLButtonElement>("[aria-expanded]")!.click());
     try {
       await act(async () => render());
-      expect(query).not.toHaveBeenCalled();
-      await toggle();
       expect(query).toHaveBeenCalledTimes(1);
       expect(element.textContent).toContain("4,501 samples");
       expect(element.querySelectorAll('[role="row"]').length).toBeLessThan(30);
@@ -67,6 +66,17 @@ describe("metadata table panel", () => {
       });
       expect(element.querySelectorAll('input[type="checkbox"]').length).toBe(1);
       await act(async () => element.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+      expect(element.querySelector("summary")?.textContent).toBe("Columns (999/1000)");
+      bottomView = "map";
+      await act(async () => render());
+      const inactiveCalls = query.mock.calls.length;
+      await act(async () => { scroll.scrollTop = 0; scroll.scrollLeft = 0; scroll.dispatchEvent(new Event("scroll", { bubbles: true })); });
+      bottomView = "metadata";
+      await act(async () => render());
+      expect(query.mock.calls.length).toBe(inactiveCalls + 1);
+      expect(query.mock.calls.at(-1)![0].pageIndex).toBe(2);
+      expect(scroll.scrollTop).toBe(9000);
+      expect(scroll.scrollLeft).toBe(90000);
       expect(element.querySelector("summary")?.textContent).toBe("Columns (999/1000)");
       await toggle();
       const count = query.mock.calls.length;

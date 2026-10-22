@@ -6,6 +6,7 @@ import type { MetadataMatrix } from "../types/metadataMatrix";
 import type { GeographicPage, GeographicRequest } from "../types/geography";
 import { coordinateFields } from "../utils/geography";
 import { metadataTooltipStyle } from "../utils/metadataTooltip";
+import { NEUTRAL_METADATA_COLOR } from "../utils/metadata";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 interface Props {
@@ -14,15 +15,15 @@ interface Props {
   selectedNodeId: string | number | null;
   field: string;
   metadataMatrix: MetadataMatrix;
+  active: boolean;
 }
 const blankStyle: StyleSpecification = { version: 8, sources: {}, layers: [
   { id: "background", type: "background", paint: { "background-color": "#edf2f4" } },
 ] };
 const initialViewport = { bounds: [-180, -85.051129, 180, 85.051129] as GeographicRequest["bounds"], zoom: 0, width: 800, height: 400 };
 
-function GeographicMap({ backend, config, selectedNodeId, field, metadataMatrix }: Props) {
+export default function GeographicMapPanel({ backend, config, selectedNodeId, field, metadataMatrix, active }: Props) {
   const available = !!coordinateFields(Object.keys(config.metadataSummaries ?? {}));
-  const [open, setOpen] = useState(true);
   const [viewport, setViewport] = useState(initialViewport);
   const [page, setPage] = useState<GeographicPage>();
   const [busy, setBusy] = useState(false);
@@ -34,27 +35,33 @@ function GeographicMap({ backend, config, selectedNodeId, field, metadataMatrix 
   const mapRef = useRef<LibreMap | null>(null);
   const pageRef = useRef(page); pageRef.current = page;
   const fitPending = useRef(true);
+  const pageSelection = useRef<string | null>(null);
   const camera = useRef<{ center: [number, number]; zoom: number }>({ center: [0, 0], zoom: 0 });
   const spec = metadataMatrix.metadata?.specs[field];
-  const color = metadataMatrix.getFieldColor(field);
+  const color = field === "genotype" ? NEUTRAL_METADATA_COLOR : metadataMatrix.getFieldColor(field);
   const fieldLabel = prettifyName(field, config);
   const nameField = String(config.name_accessor ?? "name");
+  const selectionKey = selectedNodeId === null ? "all" : `${typeof selectedNodeId}:${selectedNodeId}`;
   const request = useMemo<GeographicRequest>(() => ({ ...viewport, selectedNodeId, colorSpec: spec, color, fieldLabel, nameField }),
     [viewport, selectedNodeId, spec, color[0], color[1], color[2], fieldLabel, nameField]);
 
-  useEffect(() => { fitPending.current = true; setPage(undefined); }, [selectedNodeId]);
   useEffect(() => {
-    if (!open || !available || !backend.queryGeography) return;
+    fitPending.current = true;
+    pageSelection.current = null;
+    setPage(undefined);
+  }, [selectionKey]);
+  useEffect(() => {
+    if (!active || !available || !backend.queryGeography) return;
     let current = true;
     setBusy(true); setError("");
     const cancel = backend.queryGeography(request, result => {
       if (!current) return;
       setBusy(false);
       if ("error" in result) setError(result.error);
-      else if (!("cancelled" in result)) setPage(result);
+      else if (!("cancelled" in result)) { pageSelection.current = selectionKey; setPage(result); }
     });
     return () => { current = false; cancel(); };
-  }, [backend.queryGeography, request, open, available, retry]);
+  }, [backend.queryGeography, request, active, available, retry, selectionKey]);
 
   const fit = () => {
     const bounds = pageRef.current?.bounds;
@@ -74,7 +81,7 @@ function GeographicMap({ backend, config, selectedNodeId, field, metadataMatrix 
   };
   const hasPoints = !!page?.mappedCount;
   useEffect(() => {
-    if (!open || !available || !hasPoints || !container.current) return;
+    if (!active || !available || !hasPoints || !container.current) return;
     let disposed = false;
     let map: LibreMap | undefined, observer: ResizeObserver | undefined, workerUrl: string | undefined;
     const abort = new AbortController();
@@ -92,7 +99,7 @@ function GeographicMap({ backend, config, selectedNodeId, field, metadataMatrix 
       map.addControl(new NavigationControl({ showCompass: false }), "top-right");
       map.touchZoomRotate.disableRotation();
       const updateViewport = () => {
-        if (!map || disposed) return;
+        if (!map || disposed || !map.getContainer().clientWidth || !map.getContainer().clientHeight) return;
         const b = map.getBounds();
         camera.current = { center: map.getCenter().toArray(), zoom: map.getZoom() };
         setViewport({ bounds: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], zoom: map.getZoom(),
@@ -114,22 +121,25 @@ function GeographicMap({ backend, config, selectedNodeId, field, metadataMatrix 
       });
       map.on("mousemove", "samples", event => {
         const el = tooltip.current;
-        if (!el || !map) return;
+        if (disposed || !el || !map) return;
         el.textContent = String(event.features?.[0]?.properties?.label ?? "");
         Object.assign(el.style, metadataTooltipStyle(event.point.x, event.point.y, map.getContainer().clientWidth, map.getContainer().clientHeight));
         el.hidden = false;
       });
-      map.on("mouseleave", "samples", () => { if (tooltip.current) tooltip.current.hidden = true; });
+      map.on("mouseleave", "samples", () => { if (!disposed && tooltip.current) tooltip.current.hidden = true; });
       map.on("click", "samples", event => {
         const feature = event.features?.[0];
-        if (map && feature?.geometry.type === "Point" && Number(feature.properties?.count) > 1)
+        if (!disposed && map && feature?.geometry.type === "Point" && Number(feature.properties?.count) > 1)
           map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: Math.min(18, map.getZoom() + 2) });
       });
       let fallback = false;
       map.on("error", () => {
         if (!disposed && map && !fallback) { fallback = true; setTileError(true); map.setStyle(blankStyle); }
       });
-      observer = new ResizeObserver(() => { map?.resize(); updateViewport(); });
+      observer = new ResizeObserver(() => {
+        if (disposed || !container.current?.clientWidth || !container.current.clientHeight) return;
+        map?.resize(); updateViewport();
+      });
       observer.observe(container.current);
       try {
         const response = await fetch("https://tiles.openfreemap.org/styles/liberty", { signal: abort.signal });
@@ -139,41 +149,39 @@ function GeographicMap({ backend, config, selectedNodeId, field, metadataMatrix 
       } catch { if (!disposed) setTileError(true); }
       finally { clearTimeout(timeout); }
     }).catch(err => { if (!disposed) setMapError(`Unable to initialise map: ${String(err)}`); });
-    return () => { disposed = true; clearTimeout(timeout); abort.abort(); observer?.disconnect(); map?.remove(); if (workerUrl) URL.revokeObjectURL(workerUrl); mapRef.current = null; };
-  }, [open, available, hasPoints, retry]);
+    return () => {
+      disposed = true;
+      clearTimeout(timeout);
+      abort.abort();
+      observer?.disconnect();
+      if (map) camera.current = { center: map.getCenter().toArray(), zoom: map.getZoom() };
+      map?.remove();
+      if (workerUrl) URL.revokeObjectURL(workerUrl);
+      mapRef.current = null;
+    };
+  }, [active, available, hasPoints, retry]);
 
   useEffect(() => {
+    if (pageSelection.current !== selectionKey) return;
     updateSource();
     if (fitPending.current) fit();
     if (tooltip.current) tooltip.current.hidden = true;
-  }, [page]);
+  }, [page, selectionKey]);
 
-  return <section aria-label="Geographic map" style={{ flexShrink: 0, borderTop: "1px solid #ddd", background: "white" }}>
+  return <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
     <div style={{ display: "flex", gap: 12, padding: "6px 12px", alignItems: "center", flexWrap: "wrap" }}>
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>Geographic map {open ? "▾" : "▸"}</button>
-      {open && <>
-        <span role="status">{!available ? "No latitude/longitude columns available." : busy ? "Updating map…" : page ?
-          `${page.mappedCount.toLocaleString()} of ${page.selectedCount.toLocaleString()} selected samples mapped` : "Loading map…"}</span>
-        <button type="button" onClick={fit} disabled={!page?.bounds}>Fit selection</button>
-        <span>{field === "genotype" ? "Neutral points: genotype colouring is not supported on the map." : spec ? `Colour: ${fieldLabel}` : "Uncoloured points"}</span>
-      </>}
+      <span role="status">{!available ? "No latitude/longitude columns available." : busy ? "Updating map…" : page ?
+        `${page.mappedCount.toLocaleString()} of ${page.selectedCount.toLocaleString()} selected samples mapped` : "Loading map…"}</span>
+      <button type="button" onClick={fit} disabled={!page?.bounds}>Fit selection</button>
+      <span>{field === "genotype" ? "Neutral points: genotype colouring is not supported on the map." : spec ? `Colour: ${fieldLabel}` : "Uncoloured points"}</span>
     </div>
-    {open && <>
-      {(error || mapError) && <div role="alert">{error || mapError} <button onClick={() => setRetry(n => n + 1)}>Retry map</button></div>}
-      {available && page && !page.mappedCount && <p style={{ padding: 12 }}>No valid coordinates in the selected samples.</p>}
-      {tileError && <p role="status" style={{ padding: "0 12px" }}>Basemap unavailable; samples are shown on a plain background.</p>}
-      {available && hasPoints && <div style={{ position: "relative", height: "min(400px, 55vh)", minHeight: 240 }}>
-        <div ref={container} aria-label="Sample locations" style={{ position: "absolute", inset: 0 }} />
-        <div ref={tooltip} role="tooltip" hidden style={{ position: "absolute", left: 0, top: 0, zIndex: 2,
-          pointerEvents: "none", padding: 8, borderRadius: 4, color: "white", background: "#111827", fontSize: 12 }} />
-      </div>}
-    </>}
-  </section>;
-}
-
-export default function GeographicMapPanel(props: Props) {
-  const [dataset, setDataset] = useState({ query: props.backend.queryGeography, version: 0 });
-  if (dataset.query !== props.backend.queryGeography)
-    setDataset({ query: props.backend.queryGeography, version: dataset.version + 1 });
-  return <GeographicMap key={dataset.version} {...props} />;
+    {(error || mapError) && <div role="alert">{error || mapError} <button onClick={() => setRetry(n => n + 1)}>Retry map</button></div>}
+    {available && page && !page.mappedCount && <p style={{ padding: 12 }}>No valid coordinates in the selected samples.</p>}
+    {tileError && <p role="status" style={{ padding: "0 12px" }}>Basemap unavailable; samples are shown on a plain background.</p>}
+    {active && available && hasPoints && <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+      <div ref={container} aria-label="Sample locations" style={{ position: "absolute", inset: 0 }} />
+      <div ref={tooltip} role="tooltip" hidden style={{ position: "absolute", left: 0, top: 0, zIndex: 2,
+        pointerEvents: "none", padding: 8, borderRadius: 4, color: "white", background: "#111827", fontSize: 12 }} />
+    </div>}
+  </div>;
 }

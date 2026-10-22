@@ -25,6 +25,7 @@ export interface MetadataColorSpec extends MetadataSummary {
   ramp?: ColorRamp;
 }
 export const MISSING_COLOR: RGB = [200, 200, 200];
+export const NEUTRAL_METADATA_COLOR: RGB = [128, 128, 128];
 export const isMissingMetadata = (value: unknown): boolean =>
   value == null || (typeof value === "number" && !Number.isFinite(value)) ||
   (typeof value === "string" && ["", "unknown", "none", "n/a", "na"].includes(value.trim().toLowerCase()));
