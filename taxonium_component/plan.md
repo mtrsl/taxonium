@@ -8,42 +8,32 @@ Do not automatically begin Next Task or other backlog items.
 
 # Current Status
 
-**Phase:** Metadata infrastructure  
-**Status:** META-01–04 complete, including the META-04 tooltip placement follow-up. Both real fixture pairs passed the original browser validation, including the 2,399,238-tip compressed tree with Chrome's default heap allowance. The tooltip follow-up passes small-fixture browser validation.
+**Phase:** Visualisation improvements
+**Status:** VIS-01 complete. META-01–04 remain complete.
 
-Zoom controls preserve the current centre; matrix controls are collapsible with matching selector heights; metadata bars expose sample or aggregate tooltips to the left of the cursor, within the canvas. Worker density queries reuse exact summaries and cancel obsolete work. Compact metadata imports reduce large-tree memory. Type checking, 47 tests, component/website builds and browser checks pass; existing build warnings remain.
+The Layout control switches between standard and downward trees, with horizontal metadata rows and left-to-right sample order. The URL retains the preference; Treenome temporarily uses standard layout. Shared colours, selection/table scope, canonical navigation, density processing and exports are preserved. Metadata labels and overlays adapt to orientation and available space.
+
+Type checking, 53 tests across 16 files, component/website production builds and browser validation pass. The small fixture covers desktop/mobile interaction, minimap, search, exports and reload; the 2,399,238-tip compressed fixture covers density rendering and repeated orientation changes. Existing build warnings remain. No VIS-01 blockers.
 
 # Current Task
 
-## META-04 — Metadata interaction and large-tree rendering
+## VIS-01 — Rotated tree and metadata layout
 
-Completed META-04 and its tooltip placement follow-up. Metadata tooltips appear left of the cursor and remain inside the visualization, preserving existing content and metadata behavior. VIS-01 is not started.
+Completed the approved downward layout, preserving top-to-bottom tip order left-to-right. Standard layout remains the default; Treenome temporarily overrides the URL-backed preference.
 
 ### Checklist
 
-- [x] Place metadata tooltips left of the cursor, constrain long labels and handle vertical edges.
-- [x] Validate tooltip bounds in the browser and record follow-up checks.
-
-- [x] Fix centred zoom and isolate overlay controls from canvas picking.
-- [x] Collapse matrix controls, align selector heights and remove colour disclaimers.
-- [x] Add individual and aggregate metadata-bar tooltips.
-- [x] Optimize categorical aggregation, bound caches and coalesce requests; reject stale responses.
-- [x] Validate both real fixtures, regression tests, type checking and builds; record performance.
-- [x] Complete Design Notes, Current Status and Session Log.
-
-### Design constraints
-
-- Keep manual colour editing; remove disclaimer text only.
-- Matrix controls start collapsed and retain settings when closed.
-- Dense hover describes the rendered aggregate, never an arbitrary sample.
-- Optimize the uploaded worker path; preserve the HTTP backend contract.
-- Preserve fixed 2,000-row table pages and existing META-01–03 behaviour.
+- [x] Add shared orientation, camera and viewport transforms with URL-backed controls.
+- [x] Align tree, metadata, labels, hover, minimap and navigation in both layouts.
+- [x] Preserve SVG/PNG exports and existing backend/metadata contracts.
+- [x] Add regression coverage; validate types, tests, builds and both real fixtures.
+- [x] Record decisions, validation, status and handoff.
 
 # Next Task
 
-## VIS-01 — Rotated tree and metadata layout
+## COMP-01 — Geographic map
 
-Plan VIS-01 after META-04. Do not automatically start it.
+Plan COMP-01 after VIS-01. Do not automatically start it.
 
 ---
 
@@ -284,7 +274,9 @@ Requirements:
 - Subset displayed points according to selected samples.
 - Update when the active metadata or colour assignment changes.
 - Support appropriate zooming and panning.
-- Remain responsive for large sample counts.
+- Remain responsive for large sample counts. This will require prerender
+  on the backend component, and possibly aggregation of points when
+  zoomed out.
 
 Design considerations:
 
@@ -348,7 +340,7 @@ The project is complete when:
 - [x] Metadata table is implemented.
 - [x] Metadata legend supports large numbers of categories.
 - [x] Metadata interaction and large-tree density rendering improvements are implemented.
-- [ ] Rotated tree and metadata layout is implemented.
+- [x] Rotated tree and metadata layout is implemented.
 - [ ] Geographic MapLibre component is implemented.
 - [ ] `.dot` spatial visualisation is implemented.
 - [ ] All relevant validation passes.
@@ -358,6 +350,17 @@ The project is complete when:
 ---
 
 # Design Notes
+
+## 2026-10-22 — VIS-01 rendering and interaction findings
+
+**Decision:** Supply canonical viewport dimensions to the existing query and metadata code; swap layer model matrices and display cameras only. Density remains sampled along canonical Y, which becomes screen X. SVG applies the same swap and an affine density-image transform with viewport clipping.
+
+**Browser findings:** Existing bottom overlays obscured rotated metadata, so controls and legend move above the metadata viewport and are bounded on short/narrow screens. A transparent Deck-generated `view-main` wrapper intercepted actual pointer clicks. Move the passive metadata header outside DeckGL and remove its empty main View child; retain the interactive Treenome View. This restores canvas hit testing without accepting control-overlay events as tree clicks. The screenshot dialog also needs explicit positioning/z-index on its portal root (the scoped utility classes do not style that root); otherwise the relocated toolbar covers its format buttons. This is confined to the export dialog.
+
+## 2026-10-22 — VIS-01 approved design
+
+**Decision:** Keep canonical tree coordinates/camera and reuse rendering layers with a shared axis swap. Downward tips retain top-to-bottom order left-to-right, intentionally differing from literal clockwise rotation. Store `treeLayout=standard|rotated` in the URL; Treenome uses standard layout without changing the saved preference. Keep centre and canonical axis zoom on switching. Reuse metadata column width as rotated row thickness, existing colours, selection and aggregation. Convert viewport dimensions and screen interactions at the presentation boundary; backend contracts remain unchanged. Validate exports, small-fixture interaction and large-fixture rendering; the separate META-02 table-index check remains deferred.
+
 
 ## 2026-10-21 — META-04 tooltip placement
 
@@ -481,6 +484,42 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 ---
 
 # Session Log
+
+## 2026-10-22 — VIS-01 complete
+
+**Completed:**
+- Added the URL-backed `treeLayout=standard|rotated` preference and accessible Standard/Downward selector. Missing/invalid values use standard; Treenome retains the preference while temporarily rendering standard.
+- Reused canonical tree coordinates, camera state, node data and worker/server queries. A shared axis swap transforms display cameras, tree/metadata/minimap layers and pointer coordinates. Downward layout intentionally keeps existing tip order left-to-right rather than applying literal clockwise ordering.
+- Preserved centre and axis zoom on switching, screen-direction zoom buttons, sample-axis wheel zoom, drag, minimap navigation, search zoom, selection and table scope. Density queries use canonical dimensions, so rotated output resolution follows screen width without a second aggregation pipeline.
+- Added horizontal metadata headers/hover values and row-thickness wording. Kept labels upright and moved controls/legend above the matrix, bounding them on short/narrow screens. Removed a passive Deck wrapper that intercepted actual canvas clicks; explicitly positioned the screenshot dialog portal above controls.
+- Applied orientation and viewport clipping to SVG, including density bitmap direction. Verified SVG and PNG downloads through the actual format dialog. No dependencies, required public component props, worker/HTTP endpoints or website source changes.
+- Preserved existing uncommitted plan content and fixture files. COMP-01 was not started.
+
+**Validation:**
+- `npm run check-types`: passed, zero TypeScript errors.
+- `npm test -- --run`: 53 tests across 16 files passed, including all 47 existing tests. New coverage checks camera round trips/scalar zoom, ordering, actual orthographic projection alignment and canonical bounds, resize/clamping, screen-axis navigation, Treenome restoration, query persistence and rotated SVG polygons/density images.
+- `NODE_OPTIONS=--max-old-space-size=16384 npm run build`: passed. Existing vm-browserify/loaders.gl and mixed-export warnings remain.
+- Website `npm run build`: passed against the final component bundle; existing eval and bundle-size warnings remain. The sandbox initially blocked sibling-package cache writes; the authorized rerun passed.
+- Small-fixture Chrome: actual pointer selection and clear, linked table counts, centred zoom buttons, drag/wheel gestures, individual and aggregate hover, tree/matrix alignment, minimap drag, search-to-sample, empty metadata panels, Treenome override/restoration, reload/re-upload persistence and desktop/mobile layouts passed. SVG parsed as valid XML with canvas dimensions and metadata polygons; PNG dimensions matched. Existing HTTP endpoints and array-shaped density summaries passed via a local browser route mock; no live external server was contacted. Zero page errors.
+- Large-fixture Chrome with default heap allowance: 2,399,238 tips imported in 25.05 seconds. One/three/six metadata fields, numeric override for `n_capsule_systems`, categorical/numeric aggregate hover, repeated navigation and standard/downward switching passed. Zero page errors.
+- `git diff --check`: passed.
+
+**Large-fixture observations:** Times below include waiting for the current pickable density image at the requested canonical bounds. They are single-run observations, not a controlled speedup benchmark. Early one-field pan/zoom overlaps initial application work and is retained as measured.
+
+| Fields | First use | Pan | Zoom | Rapid navigation |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 632 ms | 473 ms | 1,374 ms | 27 ms |
+| 3 | 1,562 ms | 16 ms | 19 ms | 21 ms |
+| 6 | 1,428 ms | 33 ms | 34 ms | 23 ms |
+
+**Validation findings:** Initial implementation type errors in heterogeneous layer-spec property assignment were corrected without disabling checks. Browser validation exposed the wrapper/portal issues described in Design Notes. Test-harness corrections awaited asynchronous checkbox/type changes and GPU picking, refreshed coordinates after table resizing and waited for download actions together. These were corrected before the final passing runs. The final export-dialog-only fix did not require repeating the completed large-tree rendering run.
+
+**Evidence:** `/private/tmp/vis01-smoke.cjs` (small checks; `--large` for the compressed fixture), `/private/tmp/vis01-large.json`, `/private/tmp/vis01-{density,cells,mobile,large,export-dialog}.png`, SVG/PNG downloads at `/private/tmp/vis01-export.*`, and `/private/tmp/vis01-{component,website}-build.log`.
+
+**Remaining issues:** No VIS-01 blockers or known new validation errors. Existing build warnings remain. The separately deferred META-02 million-tip table-index validation remains reserved for the user.
+
+**Next:** Plan COMP-01 — Geographic map. Do not automatically implement it.
+
 
 ## 2026-10-21 — META-04 tooltip placement follow-up complete
 

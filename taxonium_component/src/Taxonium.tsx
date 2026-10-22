@@ -151,13 +151,7 @@ function Taxonium({
         )
       : 0,
   });
-  const mainDeckSize = useMemo(
-    () => ({
-      width: view.layout.mainViewWidth,
-      height: deckSize.height,
-    }),
-    [deckSize.height, view.layout.mainViewWidth]
-  );
+  const mainDeckSize = view.layout.canonicalTreeSize;
 
   const backend = useBackend(
     backendUrl ? backendUrl : query.backend,

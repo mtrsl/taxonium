@@ -467,7 +467,7 @@ function SearchPanel({
           </summary>
           {metadataMatrix.availableFields.length > 0 && (
             <label className="flex items-center gap-2 text-xs text-gray-700">
-              <span>Lane width</span>
+              <span>{settings.treeLayout === "rotated" && !settings.treenomeEnabled ? "Row thickness" : "Lane width"}</span>
               <input
                 type="range"
                 min={MIN_METADATA_MATRIX_COLUMN_WIDTH}
@@ -477,7 +477,7 @@ function SearchPanel({
                 onChange={(event) =>
                   metadataMatrix.setColumnWidth(Number(event.target.value))
                 }
-                aria-label="Metadata matrix lane width"
+                aria-label={settings.treeLayout === "rotated" && !settings.treenomeEnabled ? "Metadata matrix row thickness" : "Metadata matrix lane width"}
                 className="flex-1"
               />
               <span className="w-12 text-right text-gray-500">

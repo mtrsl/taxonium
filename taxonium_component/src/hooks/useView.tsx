@@ -3,6 +3,7 @@ import { OrthographicView, OrthographicController } from "@deck.gl/core";
 import type { OrthographicViewProps } from "@deck.gl/core";
 import type { Settings } from "../types/settings";
 import type { DeckSize } from "../types/common";
+import { getTreeViewLayout, orientCamera, identityMatrix, swapAxesMatrix, type TreeViewLayout } from "../utils/treeLayout";
 import type { ViewState } from "../types/view";
 
 interface ViewStateChangeParameters<ViewStateT> {
@@ -16,7 +17,6 @@ interface StyledViewProps extends OrthographicViewProps {
   borderWidth?: string;
 }
 
-const identityMatrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
 const defaultViewState: ViewState = {
   zoom: [0, -2],
@@ -47,34 +47,17 @@ const useView = ({
   const [mouseXY, setMouseXY] = useState([0, 0]);
   const [zoomAxis, setZoomAxis] = useState("Y");
 
-  const controllerProps = useMemo(
-    () => ({
-      type: OrthographicController,
-      scrollZoom: true,
-      zoomAxis: "Y",
-    }),
-    []
-  );
+  const layout = useMemo(() => getTreeViewLayout({
+    width: deckSize && Number.isFinite(deckSize.width) ? deckSize.width : window.innerWidth,
+    height: deckSize && Number.isFinite(deckSize.height) ? deckSize.height : window.innerHeight,
+  }, metadataMatrixWidth, settings.treeLayout ?? "standard", settings.treenomeEnabled),
+  [deckSize, metadataMatrixWidth, settings.treeLayout, settings.treenomeEnabled]);
 
-  const layout = useMemo(() => {
-    const totalWidth =
-      deckSize && Number.isFinite(deckSize.width) ? deckSize.width : window.innerWidth;
-    const mainAreaWidth = settings.treenomeEnabled ? totalWidth * 0.4 : totalWidth;
-    const clampedMetadataWidth = Math.max(
-      0,
-      Math.min(metadataMatrixWidth, Math.max(mainAreaWidth - 80, 0))
-    );
-    const mainViewWidth = Math.max(mainAreaWidth - clampedMetadataWidth, 0);
-    const metadataViewX = mainViewWidth;
-
-    return {
-      totalWidth,
-      mainAreaWidth,
-      mainViewWidth,
-      metadataViewX,
-      metadataMatrixWidth: clampedMetadataWidth,
-    };
-  }, [deckSize, metadataMatrixWidth, settings.treenomeEnabled]);
+  const controllerProps = useMemo(() => ({
+    type: OrthographicController,
+    scrollZoom: true,
+    zoomAxis: layout.rotated ? "X" : "Y",
+  }), [layout.rotated]);
 
   const deriveViewState = useCallback(
     (canonicalViewState: ViewStateType): ViewStateType => {
@@ -88,13 +71,13 @@ const useView = ({
         },
         "metadata-matrix": {
           zoom: [0, zoomY],
-          target: [layout.metadataMatrixWidth / 2, canonicalViewState.target[1]],
+          target: [layout.metadataThickness / 2, canonicalViewState.target[1]],
           pitch: 0,
           bearing: 0,
         },
       };
     },
-    [layout.metadataMatrixWidth]
+    [layout.metadataThickness]
   );
 
   const [viewState, setViewState] = useState<ViewStateType>(() =>
@@ -130,17 +113,16 @@ const useView = ({
       new OrthographicView({
         id: "main",
         controller: controllerProps,
-        width: layout.mainViewWidth,
+        ...layout.tree,
         initialViewState: viewState,
       } as StyledViewProps)
     );
-    if (layout.metadataMatrixWidth > 0) {
+    if (layout.metadataThickness > 0) {
       vs.push(
         new OrthographicView({
           id: "metadata-matrix",
           controller: false,
-          x: layout.metadataViewX,
-          width: layout.metadataMatrixWidth,
+          ...layout.metadata,
           initialViewState: viewState,
         } as StyledViewProps)
       );
@@ -156,13 +138,14 @@ const useView = ({
       );
     }
     if (settings.minimapEnabled && !settings.treenomeEnabled) {
+      const minimapAreaWidth = layout.tree.width + (layout.rotated ? 0 : layout.metadata.width);
       vs.push(
         new OrthographicView({
           id: "minimap",
-          x: settings.minimapPosition === "top-left" ? "1%" : "79%",
-          y: "1%",
-          width: "20%",
-          height: "35%",
+          x: minimapAreaWidth * (settings.minimapPosition === "top-left" ? 0.01 : 0.79),
+          y: layout.tree.height * 0.01,
+          width: minimapAreaWidth * 0.2,
+          height: layout.tree.height * 0.35,
           borderWidth: "1px",
           controller: controllerProps,
         } as StyledViewProps)
@@ -193,6 +176,10 @@ const useView = ({
         return viewState;
       }
 
+      // Only Deck events carry display coordinates; search/config use canonical state.
+      if ((viewId === "main" || viewId === "minimap") && !requestIsFromMinimapPan) {
+        newViewState = orientCamera(newViewState, layout.rotated);
+      }
       const canonicalViewState: ViewStateType =
         viewId === "browser-main"
           ? {
@@ -215,18 +202,19 @@ const useView = ({
       const derivedViewState = deriveViewState(canonicalViewState);
       setViewState(derivedViewState);
 
-      return derivedViewState;
+      return orientCamera(derivedViewState, layout.rotated && (viewId === "main" || viewId === "minimap") && !requestIsFromMinimapPan);
     },
-    [deriveViewState, mouseDownIsMinimap, viewState]
+    [deriveViewState, mouseDownIsMinimap, viewState, layout.rotated]
   );
 
   const zoomIncrement = useCallback(
     (increment: number, axis: string | undefined = zoomAxis) => {
         setViewState((vs: ViewStateType) => {
           const newZoom = typeof vs.zoom === "number" ? [vs.zoom, vs.zoom] : [...vs.zoom];
-          if (axis === "X") {
+          const canonicalAxis = layout.rotated ? (axis === "X" ? "Y" : axis === "Y" ? "X" : axis) : axis;
+          if (canonicalAxis === "X") {
             newZoom[0] = newZoom[0] + increment;
-          } else if (axis === "Y") {
+          } else if (canonicalAxis === "Y") {
             newZoom[1] = newZoom[1] + increment;
           } else {
             newZoom[0] = newZoom[0] + increment;
@@ -235,21 +223,32 @@ const useView = ({
           return deriveViewState({ ...vs, zoom: newZoom } as ViewStateType);
         });
     },
-    [deriveViewState, zoomAxis]
+    [deriveViewState, zoomAxis, layout.rotated]
   );
 
   const zoomReset = useCallback(() => {
     setViewState(deriveViewState(defaultViewState));
   }, [deriveViewState]);
 
+  const displayViewState = useMemo(() => {
+    const derived = deriveViewState(viewState);
+    return {
+      ...orientCamera(derived, layout.rotated),
+      main: orientCamera(derived, layout.rotated),
+      minimap: orientCamera(derived.minimap!, layout.rotated),
+      "metadata-matrix": orientCamera(derived["metadata-matrix"]!, layout.rotated),
+    };
+  }, [viewState, layout.rotated, deriveViewState]);
+
   return {
     viewState,
+    displayViewState,
     setViewState,
     onViewStateChange,
     views,
     zoomAxis,
     setZoomAxis,
-    modelMatrix: identityMatrix,
+    modelMatrix: layout.rotated ? swapAxesMatrix : identityMatrix,
     zoomIncrement,
     xzoom: 0,
     mouseXY,
@@ -264,6 +263,7 @@ export default useView;
 
 export interface View {
   viewState: ViewState;
+  displayViewState: ViewState;
   setViewState: React.Dispatch<React.SetStateAction<ViewState>>;
   onViewStateChange: any;
   views: any;
@@ -276,11 +276,5 @@ export interface View {
   setMouseXY: React.Dispatch<React.SetStateAction<number[]>>;
   baseViewState: ViewState;
   zoomReset: () => void;
-  layout: {
-    totalWidth: number;
-    mainAreaWidth: number;
-    mainViewWidth: number;
-    metadataViewX: number;
-    metadataMatrixWidth: number;
-  };
+  layout: TreeViewLayout;
 }

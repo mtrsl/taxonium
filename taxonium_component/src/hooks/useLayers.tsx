@@ -1,3 +1,4 @@
+import { orientPoint, type TreeViewLayout } from "../utils/treeLayout";
 import { densityValueLabel, metadataValueLabel } from "../utils/metadataTooltip";
 import { isMissingMetadata } from "../utils/metadata";
 import {
@@ -425,6 +426,7 @@ interface UseLayersProps {
   search: SearchState;
   viewState: ViewState;
   deckSize: DeckSize | null;
+  layout: TreeViewLayout;
   colorHook: ColorHook;
   setHoverInfo: (info: HoverInfo<Node> | null) => void;
   hoverInfo: HoverInfo<Node> | null;
@@ -450,6 +452,7 @@ const useLayers = ({
   search,
   viewState,
   deckSize,
+  layout,
   colorHook,
   setHoverInfo,
   hoverInfo,
@@ -1517,6 +1520,20 @@ const useLayers = ({
     [isCurrentlyOutsideBounds],
   );
 
+  // Transform all tree/matrix layers together, including minimap and fill-in data.
+  // Text stays billboarded and upright; only its anchor and offset change.
+  for (const layer of layers) {
+    if (!layer || layer.id.startsWith("browser")) continue;
+    Object.assign(layer, { modelMatrix });
+    if (layout.rotated && layer.layerType === "TextLayer") {
+      Object.assign(layer, {
+        getTextAnchor: "middle",
+        getAlignmentBaseline: layer.id === "main-text-node" ? "top" : "bottom",
+        getPixelOffset: layer.id === "main-text-node" ? [0, 10] : [0, -6],
+      });
+    }
+  }
+
   const processedLayers = layers
     .filter((x) => x !== null)
     .map((layer) => {
@@ -1544,14 +1561,14 @@ const useLayers = ({
   const { triggerSVGdownload } = getSVGfunction(
     layers.filter((x) => x !== null),
     viewState,
-    metadataMatrix.isEnabled && deckSize ? { treeWidth: deckSize.width, matrixWidth: metadataMatrix.panelWidth } : undefined,
+    deckSize ? { treeWidth: deckSize.width, treeHeight: deckSize.height, matrixWidth: layout.metadataThickness, rotated: layout.rotated } : undefined,
   );
 
   const getMetadataTooltip = (info: { layer?: { id: string } | null; object?: MetadataMatrixCell; coordinate?: number[] }) => {
     if (!info.layer?.id.startsWith("metadata-matrix-")) return null;
     if (info.layer.id === "metadata-matrix-density") {
       if (!densityCurrent || !densityPayload || !info.coordinate) return null;
-      const [x, y] = info.coordinate;
+      const [x, y] = orientPoint(info.coordinate, layout.rotated);
       const column = Math.floor((x - 12) / metadataMatrix.columnWidth);
       const field = metadataMatrix.matrixFields[column];
       if (!field || x < 13 + column * metadataMatrix.columnWidth || x > 11 + (column + 1) * metadataMatrix.columnWidth) return null;

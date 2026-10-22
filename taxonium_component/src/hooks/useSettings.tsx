@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { toast } from "react-hot-toast";
+import { parseTreeLayout, type TreeLayout } from "../utils/treeLayout";
 import getDefaultQuery from "../utils/getDefaultQuery";
 import type {
   Settings,
@@ -138,6 +139,8 @@ export const useSettings = ({ query, updateQuery }: UseSettingsProps): Settings 
   }, []);
 
   return {
+    treeLayout: parseTreeLayout(query.treeLayout),
+    setTreeLayout: (treeLayout: TreeLayout) => updateQuery({ treeLayout }),
     minimapEnabled,
     minimapPosition,
     setMinimapPosition,

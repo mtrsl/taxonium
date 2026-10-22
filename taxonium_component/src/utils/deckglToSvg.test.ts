@@ -22,3 +22,22 @@ it("exports tree and categorical/numeric matrix cells using their shared colour 
   expect(svg).toContain('points="112,50 124,50 124,60 112,60"');
   vi.restoreAllMocks(); vi.unstubAllGlobals();
 });
+
+it("exports downward tree and metadata at aligned sample positions, including density image direction", async () => {
+  let blob: Blob | undefined;
+  vi.stubGlobal("URL", { createObjectURL: (value: Blob) => { blob = value; return "blob:test"; }, revokeObjectURL: vi.fn() });
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  try {
+    getSVGfunction([
+      { id: "main-scatter", layerType: "ScatterplotLayer", data: [0], getPosition: () => [0, 10], getFillColor: [255, 0, 0], getRadius: 2 },
+      { id: "metadata-matrix-boxes", layerType: "PolygonLayer", data: [0], getPolygon: () => [[12,10],[24,10],[24,20],[12,20]], getFillColor: [255, 0, 0, 255] },
+      { id: "metadata-matrix-density", layerType: "BitmapLayer", image: { toDataURL: () => "data:image/png;base64,test" }, bounds: [0, -50, 50, 50] },
+    ], { zoom: [0, 0], target: [0, 0] }, { treeWidth: 100, treeHeight: 100, matrixWidth: 50, rotated: true }).triggerSVGdownload({ width: 100, height: 150 });
+    const svg = await new Promise<string>(resolve => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsText(blob!); });
+    expect(svg).toContain('width="100" height="150"');
+    expect(svg).toContain('cx="60" cy="50"');
+    expect(svg).toContain('points="60,112 60,124 70,124 70,112"');
+    expect(svg).toContain('transform="matrix(0 50 -100 0 100 100)"');
+    expect(svg).toContain('<rect x="0" y="100" width="100" height="50"');
+  } finally { vi.restoreAllMocks(); vi.unstubAllGlobals(); }
+});

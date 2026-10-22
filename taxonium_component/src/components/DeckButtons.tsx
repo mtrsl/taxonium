@@ -17,6 +17,8 @@ import type { DeckSize } from "../types/common";
 import type { Settings } from "../types/settings";
 
 interface DeckButtonsProps {
+  bottomOffset?: number;
+  availableHeight?: number;
   loading: boolean;
   setZoomAxis: (axis: string) => void;
   zoomAxis: string;
@@ -30,6 +32,8 @@ interface DeckButtonsProps {
 }
 
 export const DeckButtons = ({
+  bottomOffset = 0,
+  availableHeight,
   loading,
   setZoomAxis,
   zoomAxis,
@@ -46,8 +50,11 @@ export const DeckButtons = ({
       style={{
         position: "absolute",
         right: "0em",
-        bottom: "0em",
+        bottom: bottomOffset,
         zIndex: 2,
+        maxWidth: "100%",
+        maxHeight: availableHeight,
+        overflowY: "auto",
         pointerEvents: "none",
       }}
       className="flex flex-col items-end"
@@ -57,6 +64,9 @@ export const DeckButtons = ({
         style={{
           marginBottom: "0em",
           marginRight: "0em",
+          maxWidth: "100%",
+          width: deckSize.width < 600 ? 260 : undefined,
+          flexWrap: "wrap",
         }}
       >
         {loading && (
@@ -83,6 +93,16 @@ export const DeckButtons = ({
             Taxonium
           </a>
         </div>
+        <label style={{ pointerEvents: "auto", background: "white", alignSelf: "center", fontSize: "12px", padding: "4px", marginLeft: "auto" }}>
+          Layout{" "}
+          <select style={{ width: 112, padding: "2px 24px 2px 6px" }} aria-label="Tree layout" value={settings.treenomeEnabled ? "standard" : settings.treeLayout ?? "standard"}
+            disabled={settings.treenomeEnabled}
+            title={settings.treenomeEnabled ? "Treenome uses standard layout; your layout preference will return when it is disabled." : "Tree layout"}
+            onChange={event => settings.setTreeLayout?.(event.target.value === "rotated" ? "rotated" : "standard")}>
+            <option value="standard">Standard</option>
+            <option value="rotated">Downward</option>
+          </select>
+        </label>
         <TaxButton
           onClick={() => {
             requestOpenSettings();

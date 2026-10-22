@@ -1,3 +1,4 @@
+import { orientPoint } from "./treeLayout";
 import computeBounds from "./computeBounds";
 import type { DeckSize } from "../types/common";
 import type { ViewState } from "../types/view";
@@ -6,7 +7,7 @@ import type { ViewState } from "../types/view";
 const getSVGfunction = (
   layers: any[],
   viewState: ViewState,
-  metadataLayout?: { treeWidth: number; matrixWidth: number }
+  metadataLayout?: { treeWidth: number; matrixWidth: number; treeHeight?: number; rotated?: boolean }
 ): { triggerSVGdownload: (deckSize?: DeckSize) => void } => {
   const accessOrConstant = <T, R>(accessor: ((node: T) => R) | R, node: T): R => {
     if (typeof accessor === "function") {
@@ -25,6 +26,8 @@ const getSVGfunction = (
     svgWidth: number,
     svgHeight: number
   ): string => {
+    const rotated = metadataLayout?.rotated ?? false;
+    const orient = (point: [number, number]) => orientPoint(point, rotated);
     const applyBounds = (point: [number, number]): [number, number] => {
       const minY = viewState.min_y as number;
       const maxY = viewState.max_y as number;
@@ -33,17 +36,24 @@ const getSVGfunction = (
       const initial = point;
       const x = normalise(initial[0], minX, maxX);
       const y = normalise(initial[1], minY, maxY);
-      return [x * (metadataLayout?.treeWidth ?? svgWidth), y * svgHeight];
+      return orient([x * (metadataLayout?.treeWidth ?? svgWidth), y * svgHeight]);
     };
   
-    let svgContent = `<svg xmlns='http://www.w3.org/2000/svg' width="${svgWidth}" height="${svgHeight}">`;
+    let svgContent = `<svg xmlns='http://www.w3.org/2000/svg' width="${rotated ? svgHeight : svgWidth}" height="${rotated ? svgWidth : svgHeight}">`;
 
-    if (metadataLayout) svgContent += `<defs><clipPath id="metadata-clip"><rect x="${metadataLayout.treeWidth}" y="0" width="${metadataLayout.matrixWidth}" height="${svgHeight}" /></clipPath></defs>`;
+    const treeSize = orient([metadataLayout?.treeWidth ?? svgWidth, svgHeight]);
+    svgContent += `<defs><clipPath id="tree-clip"><rect width="${treeSize[0]}" height="${treeSize[1]}" /></clipPath>`;
+    if (metadataLayout) {
+      const origin = orient([metadataLayout.treeWidth, 0]);
+      const size = orient([metadataLayout.matrixWidth, svgHeight]);
+      svgContent += `<clipPath id="metadata-clip"><rect x="${origin[0]}" y="${origin[1]}" width="${size[0]}" height="${size[1]}" /></clipPath>`;
+    }
+    svgContent += "</defs>";
 
     for (const layer of layers) {
       if (metadataLayout && layer.id.startsWith("metadata-matrix-")) {
         const matrixPoint = ([x, y]: [number, number]) =>
-          [metadataLayout.treeWidth + x, applyBounds([0, y])[1]];
+          orient([metadataLayout.treeWidth + x, normalise(y, viewState.min_y!, viewState.max_y!) * svgHeight]);
         const css = (color: number[]) => `rgba(${color.slice(0, 3).join(",")},${(color[3] ?? 255) / 255})`;
         // Clip the matrix to its viewport, just as Deck does on screen.
         svgContent += `<g clip-path="url(#metadata-clip)">`;
@@ -57,10 +67,12 @@ const getSVGfunction = (
           }
         } else if (layer.layerType === "BitmapLayer" && layer.image) {
           const [x0, y0, x1, y1] = layer.bounds;
-          const top = matrixPoint([x0, Math.min(y0, y1)]);
-          const height = Math.abs(matrixPoint([0, y1])[1] - matrixPoint([0, y0])[1]);
-          // Worker bitmaps run from maximum to minimum Y; SVG Y runs downwards.
-          svgContent += `<image x="${top[0]}" y="${top[1]}" width="${x1 - x0}" height="${height}" preserveAspectRatio="none" transform="translate(0 ${2 * top[1] + height}) scale(1 -1)" href="${layer.image.toDataURL()}" />`;
+          // Map image top-left (maximum sample Y), top-right and bottom-left.
+          // The same affine mapping handles standard and swapped sample axes.
+          const origin = matrixPoint([x0, Math.max(y0, y1)]);
+          const right = matrixPoint([x1, Math.max(y0, y1)]);
+          const bottom = matrixPoint([x0, Math.min(y0, y1)]);
+          svgContent += `<image width="1" height="1" preserveAspectRatio="none" transform="matrix(${right[0] - origin[0]} ${right[1] - origin[1]} ${bottom[0] - origin[0]} ${bottom[1] - origin[1]} ${origin[0]} ${origin[1]})" href="${layer.image.toDataURL()}" />`;
         }
         svgContent += "</g>";
         continue;
@@ -70,6 +82,7 @@ const getSVGfunction = (
         continue;
       }
 
+      svgContent += '<g clip-path="url(#tree-clip)">';
       switch (layer.layerType) {
         case "ScatterplotLayer":
           for (const point of layer.data) {
@@ -172,6 +185,7 @@ const getSVGfunction = (
           console.warn(`Unsupported layer type: ${layer.layerType}`);
           break;
       }
+      svgContent += "</g>";
     }
 
     svgContent += "</svg>";
@@ -182,9 +196,10 @@ const getSVGfunction = (
     if (!deckSize) {
       deckSize = { width: 600, height: 600 };
     }
-    const svgWidth = metadataLayout ? metadataLayout.treeWidth + metadataLayout.matrixWidth : deckSize.width;
-    const svgHeight = deckSize.height;
-    const viewStateWithBounds = computeBounds({ ...viewState }, { ...deckSize, width: metadataLayout?.treeWidth ?? deckSize.width });
+    const canonicalSize = metadataLayout?.rotated ? { width: deckSize.height, height: deckSize.width } : deckSize;
+    const svgWidth = metadataLayout ? metadataLayout.treeWidth + metadataLayout.matrixWidth : canonicalSize.width;
+    const svgHeight = metadataLayout?.treeHeight ?? canonicalSize.height;
+    const viewStateWithBounds = computeBounds({ ...viewState }, { height: svgHeight, width: metadataLayout?.treeWidth ?? canonicalSize.width });
     const svgContent = getSVG(layers, viewStateWithBounds, svgWidth, svgHeight);
     if (!svgContent) {
       return;

@@ -14,6 +14,8 @@ export interface KeyItem {
 }
 
 interface KeyProps {
+  bottomOffset?: number;
+  availableHeight?: number;
   keyStuff: KeyItem[];
   colorByField: string;
   colorByGene?: string;
@@ -129,7 +131,7 @@ const Key = (props: KeyProps) => {
 
 function KeyContent({ keyStuff, colorByField, colorByGene, colorByPosition, config,
   setCurrentColorSettingKey, setColorSettingOpen, hoveredKey, setHoveredKey,
-  colorRamps, numericEmpty, collapsed, setCollapsed,
+  colorRamps, numericEmpty, collapsed, setCollapsed, bottomOffset = 0, availableHeight,
 }: KeyProps & { collapsed: boolean; setCollapsed: (value: boolean) => void }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const editorFrame = useRef<number | null>(null);
@@ -161,7 +163,7 @@ function KeyContent({ keyStuff, colorByField, colorByGene, colorByPosition, conf
     <div aria-label="Colour legend" className={classNames(
       "px-2 border-right border bg-white border-gray-200 opacity-90 absolute bottom-2 left-2 pt-1 pb-2",
       collapsed ? "w-20" : "w-32"
-    )} style={{ zIndex: 10, cursor: "default" }}>
+    )} style={{ zIndex: 10, cursor: "default", bottom: 8 + bottomOffset, maxHeight: availableHeight === undefined ? undefined : Math.max(24, availableHeight - 16), overflowY: "auto" }}>
       <h3><button type="button" className="font-bold text-gray-600 text-xs cursor-pointer text-left w-full"
         aria-label={collapsed ? "Expand colour legend" : "Collapse colour legend"} aria-expanded={!collapsed}
         onClick={() => { setCollapsed(!collapsed); close(); }}>

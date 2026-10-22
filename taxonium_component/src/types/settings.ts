@@ -1,4 +1,5 @@
 import type React from "react";
+import type { TreeLayout } from "../utils/treeLayout";
 
 export interface PrettyStroke {
   enabled: boolean;
@@ -9,6 +10,8 @@ export interface PrettyStroke {
 export type MinimapPosition = "top-left" | "top-right";
 
 export interface Settings {
+  treeLayout?: TreeLayout;
+  setTreeLayout?: (layout: TreeLayout) => void;
   minimapEnabled: boolean;
   minimapPosition: MinimapPosition;
   setMinimapPosition: (position: MinimapPosition) => void;

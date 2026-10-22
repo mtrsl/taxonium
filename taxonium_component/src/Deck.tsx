@@ -1,3 +1,4 @@
+import { orientPoint } from "./utils/treeLayout";
 import { metadataLegendRamp } from "./utils/metadata";
 /// app.js
 import React, { useState, useCallback, useRef, Suspense, useEffect } from "react";
@@ -215,12 +216,12 @@ function Deck({
           requestIsFromMinimapPan: true,
           viewState: {
             ...viewState,
-            target: [pickInfo.coordinate?.[0] ?? 0, pickInfo.coordinate?.[1] ?? 0],
+            target: orientPoint(pickInfo.coordinate ?? [0, 0], view.layout.rotated),
           },
         });
       }
     },
-    [selectedDetails, mouseDownIsMinimap, viewState, onViewStateChange, deckRef, onNodeSelect]
+    [selectedDetails, mouseDownIsMinimap, viewState, onViewStateChange, deckRef, onNodeSelect, view.layout.rotated]
   );
 
   const [hoverInfo, setHoverInfoRaw] = useState<
@@ -250,6 +251,7 @@ function Deck({
     search,
     viewState,
     deckSize: mainDeckSize,
+    layout: view.layout,
     colorHook,
     setHoverInfo: setHoverInfo as (info: HoverInfo<Node> | null) => void,
     hoverInfo: hoverInfo as HoverInfo<Node> | null,
@@ -364,7 +366,7 @@ function Deck({
       <MetadataMatrixHoverValues
         hoverInfo={hoverInfo as HoverInfo<Node> | null}
         metadataMatrix={metadataMatrix}
-        metadataViewX={view.layout.metadataViewX}
+        layout={view.layout}
       />
       <TreenomeMutationHoverTip
         hoverInfo={hoverInfo as HoverInfo<{ m?: Mutation }> | null}
@@ -375,6 +377,8 @@ function Deck({
         treenomeReferenceInfo={treenomeReferenceInfo}
       />
       <MemoizedKey
+        bottomOffset={view.layout.rotated ? view.layout.metadata.height : 0}
+        availableHeight={view.layout.tree.height}
         datasetIdentity={backend.getConfig}
         keyStuff={keyStuff}
         colorByField={colorBy.colorByField}
@@ -391,6 +395,8 @@ function Deck({
         setHoveredKey={setHoveredKey}
       />
       <DeckButtons
+        bottomOffset={view.layout.rotated ? view.layout.metadata.height : 0}
+        availableHeight={view.layout.tree.height}
         // we want this to intercept all mouse events
         // so that we can prevent the default behavior
         // of the browser
@@ -405,12 +411,69 @@ function Deck({
         requestOpenSettings={() => setDeckSettingsOpen(true)}
         settings={settings}
       />
+      {metadataMatrix.isEnabled && (
+        <div
+          style={{
+            position: "absolute",
+            top: view.layout.metadata.y,
+            left: view.layout.metadata.x,
+            width: view.layout.rotated ? metadataMatrix.headerHeight : view.layout.metadata.width,
+            height: view.layout.rotated ? view.layout.metadata.height : metadataMatrix.headerHeight,
+            overflow: view.layout.rotated ? "hidden" : undefined,
+            pointerEvents: "none",
+            zIndex: 2,
+            background:
+              view.layout.rotated ? "linear-gradient(to right, white, rgba(255,255,255,0.75), transparent)" : "linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(255,255,255,0.75), rgba(255,255,255,0))",
+            borderLeft: "1px solid rgba(209, 213, 219, 0.95)",
+          }}
+        >
+          <div className="relative w-full h-full">
+            {metadataMatrix.matrixFields.map((field, index) => (
+              <div
+                key={field.field}
+                style={{
+                  position: "absolute",
+                  top: view.layout.rotated ? 12 + index * metadataMatrix.columnWidth : 10,
+                  left: view.layout.rotated ? 4 : 12 + index * metadataMatrix.columnWidth,
+                  width: view.layout.rotated ? metadataMatrix.headerHeight - 8 : metadataMatrix.columnWidth,
+                  height: view.layout.rotated ? metadataMatrix.columnWidth : undefined,
+                  alignItems: view.layout.rotated ? "center" : undefined,
+                  display: "flex",
+                  justifyContent: "center",
+                }}
+              >
+                <span
+                  style={{
+                    writingMode: view.layout.rotated ? "horizontal-tb" : "vertical-rl",
+                    transform: view.layout.rotated ? undefined : "rotate(180deg)",
+                    overflow: view.layout.rotated ? "hidden" : undefined,
+                    textOverflow: "ellipsis",
+                    whiteSpace: view.layout.rotated ? "nowrap" : undefined,
+                    color: `rgb(${darkenMetadataColor(field.color).join(", ")})`,
+                    fontSize: "11px",
+                    lineHeight: 1,
+                    fontWeight: 600,
+                    textAlign: "left",
+                    display: "inline-block",
+                    backgroundColor: "rgba(255, 255, 255, 0.65)",
+                    borderRadius: "2px",
+                    boxShadow: "0 0 2px rgba(0, 0, 0, 0.25)",
+                    textShadow: "0 0 1px rgba(255, 255, 255, 0.9)",
+                  }}
+                >
+                  {field.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <DeckGL
         pickingRadius={10}
         //getCursor={() => hoverInfo && hoverInfo.object ? "default" : "pointer"}
         ref={deckRef}
         views={views}
-        viewState={viewState}
+        viewState={view.displayViewState}
         onViewStateChange={onViewStateChange}
         layerFilter={layerFilter}
         layers={layers}
@@ -438,57 +501,6 @@ function Deck({
           }
         }}
       >
-        {metadataMatrix.isEnabled && (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: `${view.layout.metadataViewX}px`,
-              width: `${view.layout.metadataMatrixWidth}px`,
-              height: `${metadataMatrix.headerHeight}px`,
-              pointerEvents: "none",
-              zIndex: 2,
-              background:
-                "linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(255,255,255,0.75), rgba(255,255,255,0))",
-              borderLeft: "1px solid rgba(209, 213, 219, 0.95)",
-            }}
-          >
-            <div className="relative w-full h-full">
-              {metadataMatrix.matrixFields.map((field, index) => (
-                <div
-                  key={field.field}
-                  style={{
-                    position: "absolute",
-                    top: "10px",
-                    left: `${12 + index * metadataMatrix.columnWidth}px`,
-                    width: `${metadataMatrix.columnWidth}px`,
-                    display: "flex",
-                    justifyContent: "center",
-                  }}
-                >
-                  <span
-                    style={{
-                      writingMode: "vertical-rl",
-                      transform: "rotate(180deg)",
-                      color: `rgb(${darkenMetadataColor(field.color).join(", ")})`,
-                      fontSize: "11px",
-                      lineHeight: 1,
-                      fontWeight: 600,
-                      textAlign: "left",
-                      display: "inline-block",
-                      backgroundColor: "rgba(255, 255, 255, 0.65)",
-                      borderRadius: "2px",
-                      boxShadow: "0 0 2px rgba(0, 0, 0, 0.25)",
-                      textShadow: "0 0 1px rgba(255, 255, 255, 0.9)",
-                    }}
-                  >
-                    {field.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
         <DeckView id="browser-axis">
           <div
             style={{
@@ -531,7 +543,6 @@ function Deck({
             settings={settings}
           />
         </DeckView>
-        <DeckView id="main"></DeckView>
       </DeckGL>
     </div>
   );

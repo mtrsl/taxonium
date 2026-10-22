@@ -38,6 +38,7 @@ const SnapshotButton = ({ svgFunction, pixelFunction, deckSize }: SnapshotButton
           as="div"
           static
           className="fixed inset-0 z-10 overflow-y-auto taxonium"
+          style={{ position: "fixed", inset: 0, zIndex: 50 }}
           open={isOpen}
           onClose={setIsOpen}
         >
