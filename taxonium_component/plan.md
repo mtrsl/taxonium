@@ -324,6 +324,102 @@ Design considerations:
 
 ---
 
+# Final Application Improvements
+
+These tasks should be undertaken after the main metadata and visualisation improvements are complete, unless explicitly prioritised earlier.
+
+Do not begin these tasks automatically.
+
+### APP-01 — Local-only dataset loading
+
+Remove the remote server dataset selection functionality and make local file loading through drag and drop the primary method for opening datasets.
+
+Requirements:
+
+- Remove the UI and application logic for browsing or selecting remotely hosted datasets.
+- Change and simplify the landing page to a drop zone for file input.
+  (also supporting a file selection dialog)
+- Support loading datasets from local files through drag and drop.
+- Preserve the existing local server approach for preprocessing, prerendering, and other operations that require server-side functionality.
+- Ensure locally loaded datasets work with the existing tree, metadata, and visualisation components.
+- Provide clear progress and error reporting during file loading.
+- Remove obsolete configuration and code associated exclusively with remote dataset selection.
+- Preserve support for large datasets without introducing unnecessary client-side memory usage.
+
+Design considerations:
+
+- Distinguish remote dataset hosting from the local server functionality required for processing and rendering.
+- Reuse existing file loading and preprocessing mechanisms where practical.
+- Avoid transferring processing responsibilities to the browser unnecessarily.
+- Consider how local file paths and temporary files will be managed, particularly for future Electron packaging.
+- Do not remove server functionality still required by the application.
+
+### APP-02 — Simplify application layout
+
+Remove the top navigation bar to maximise the vertical space available for the tree and metadata visualisations.
+
+Requirements:
+
+- Remove the top navigation bar entirely.
+- Remove the application logo.
+- Remove the tree selector.
+- Remove the GitHub links from the application interface.
+- Allow the main visualisation area to use the additional vertical space.
+- Ensure the layout resizes correctly when the browser window changes size.
+- Preserve access to essential controls, including local dataset loading and visualisation settings.
+- Check that the layout works at different screen sizes.
+
+Design considerations:
+
+- Avoid leaving unused margins or containers where the navigation bar was previously displayed.
+- Remove obsolete components and styling where they are no longer needed.
+- Ensure that removing the tree selector does not break dataset loading or tree state management.
+- Prefer simplifying existing layout components rather than introducing additional layout abstractions.
+
+### APP-03 — Electron desktop application
+
+Create an Electron-based desktop version of the application that supports local dataset loading and retains the functionality of the browser-based application.
+
+Requirements:
+
+- Add an Electron application entry point and appropriate configuration.
+- Package the existing application rather than duplicating its UI or visualisation code.
+- Support drag-and-drop loading of local datasets.
+- Preserve the local server functionality required for preprocessing and prerendering.
+- Ensure the local server starts and stops appropriately with the Electron application.
+- Avoid requiring the user to manually start a development server.
+- Ensure that file loading, metadata, and visualisation features work in the packaged application.
+- Provide clear error reporting if the local server fails to start.
+- Add scripts for building and packaging the Electron application.
+- Document development, build, and packaging instructions.
+- Document platform-specific requirements and limitations.
+- Validate the packaged application on the available development platform.
+
+Design considerations:
+
+- Reuse the existing website and component packages.
+- Investigate whether the local server should run as a child process or through another suitable mechanism.
+- Ensure that application resources and local server assets are correctly located in packaged builds.
+- Use secure Electron defaults, including context isolation and disabling unnecessary Node.js integration in renderer processes.
+- Avoid exposing unrestricted filesystem or process access to the renderer.
+- Ensure the application can close cleanly without leaving background server processes.
+- Consider cross-platform packaging for Linux, macOS, and Windows, without requiring all platforms to be supported in the initial implementation.
+- Keep the browser-based application functional unless explicitly instructed otherwise.
+
+#### Documentation
+
+Add build instructions covering:
+
+- Development environment and prerequisites.
+- Installing dependencies with `npm`.
+- Running the Electron application in development mode.
+- Building the application for production.
+- Generating distributable packages.
+- Running the packaged application.
+- Known platform-specific limitations.
+
+Add a github action which builds the application
+
 # Definition of Done
 
 ## Current Task
