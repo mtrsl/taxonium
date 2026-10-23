@@ -1,6 +1,6 @@
 import useServerBackend from "./useServerBackend";
 import useLocalBackend from "./useLocalBackend";
-import type { Backend } from "../types/backend";
+import type { Backend, ImportStatus } from "../types/backend";
 
 interface WindowWithAnalytics extends Window {
   done_ev?: boolean;
@@ -10,10 +10,11 @@ interface WindowWithAnalytics extends Window {
 function useBackend(
   backend_url: string | null | undefined,
   sid: string | null | undefined,
-  uploaded_data: Record<string, unknown> | null
+  uploaded_data: Record<string, unknown> | null,
+  onImportStatus?: (status: ImportStatus) => void
 ): Backend | null {
   const serverBackend = useServerBackend(backend_url ?? null, sid ?? null);
-  const localBackend = useLocalBackend(uploaded_data);
+  const localBackend = useLocalBackend(backend_url ? null : uploaded_data, onImportStatus);
   if (backend_url) {
     const w = window as WindowWithAnalytics;
     if (!w.done_ev) {

@@ -17,7 +17,7 @@ import useHoverDetails from "./hooks/useHoverDetails";
 import type { DeckGLRef } from "@deck.gl/react";
 import useBackend from "./hooks/useBackend";
 import usePerNodeFunctions from "./hooks/usePerNodeFunctions";
-import type { DynamicDataWithLookup } from "./types/backend";
+import type { ImportStatus, DynamicDataWithLookup } from "./types/backend";
 import useConfig from "./hooks/useConfig";
 import { useSettings } from "./hooks/useSettings";
 import { MdArrowBack, MdArrowUpward } from "react-icons/md";
@@ -39,12 +39,15 @@ interface SourceData {
   status: string;
   filename: string;
   filetype: string;
-  data?: string;
+  data?: string | ArrayBuffer;
+  /** Opt in to transferring input buffers; callers must reread files before retry. */
+  transferOwnership?: boolean;
   [key: string]: unknown;
 }
 
 interface TaxoniumProps {
   sourceData?: SourceData;
+  onImportStatus?: (status: ImportStatus) => void;
   backendUrl?: string;
   configDict?: Record<string, unknown>;
   configUrl?: string;
@@ -68,6 +71,7 @@ const default_query = getDefaultQuery();
 
 function Taxonium({
   sourceData,
+  onImportStatus,
 
   backendUrl,
 
@@ -157,7 +161,8 @@ function Taxonium({
   const backend = useBackend(
     backendUrl ? backendUrl : query.backend,
     query.sid,
-    sourceData ?? null
+    sourceData ?? null,
+    onImportStatus
   );
   if (!backend) {
     return (

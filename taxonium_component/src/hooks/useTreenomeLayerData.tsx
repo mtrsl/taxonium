@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useEffect, useState } from "react";
+import { useCallback, useRef, useEffect, useState } from "react";
 
 import workerSpec from "../webworkers/treenomeWorker.js?worker&inline";
 import type { VariationDatum } from "../types/treenome";
@@ -31,9 +31,18 @@ const useTreenomeLayerData = (
 
   const [currentJobId, setCurrentJobId] = useState(null);
 
-  const worker = useMemo(() => new workerSpec(), []);
+  const worker = useRef<Worker | null>(null);
+  useEffect(() => {
+    const instance = new workerSpec();
+    worker.current = instance;
+    return () => {
+      instance.onmessage = null;
+      instance.terminate();
+      worker.current = null;
+    };
+  }, []);
 
-  worker.onmessage = useCallback(
+  const onMessage = useCallback(
     (e: MessageEvent<any>) => {
       if (!treenomeReferenceInfo && e.data.treenomeReferenceInfo) {
         setTreenomeReferenceInfo(e.data.treenomeReferenceInfo);
@@ -62,6 +71,10 @@ const useTreenomeLayerData = (
   );
 
   useEffect(() => {
+    if (worker.current) worker.current.onmessage = onMessage;
+  }, [onMessage]);
+
+  useEffect(() => {
     if (!(data.data && data.data.nodes)) {
       return;
     }
@@ -76,7 +89,7 @@ const useTreenomeLayerData = (
     ) {
       if (settings.mutationTypesEnabled.aa) {
         const jobId = data.data.nodes.length;
-        worker.postMessage({
+        worker.current?.postMessage({
           type: "variation_data_aa",
           data: data,
           jobId: jobId,
@@ -95,7 +108,7 @@ const useTreenomeLayerData = (
     ) {
       if (settings.mutationTypesEnabled.nt) {
         const jobId = data.data.nodes.length;
-        worker.postMessage({
+        worker.current?.postMessage({
           type: "variation_data_nt",
           data: data,
           jobId: jobId,
@@ -149,7 +162,7 @@ const useTreenomeLayerData = (
     let jobId = data.data.nodes.length;
     if (!skipAa) {
       if (settings.mutationTypesEnabled.aa) {
-        worker.postMessage({
+        worker.current?.postMessage({
           type: "variation_data_aa",
           data: data,
           jobId: jobId,
@@ -159,7 +172,7 @@ const useTreenomeLayerData = (
     }
     if (!skipNt) {
       if (settings.mutationTypesEnabled.nt) {
-        worker.postMessage({
+        worker.current?.postMessage({
           type: "variation_data_nt",
           data: data,
           jobId: jobId,

@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
+const importParams = new Set(["backend", "sid", "protoUrl", "treeUrl", "metaUrl", "embeddingUrl", "treeType", "metaType", "taxonColumn", "ladderizeTree", "configUrl", "config", "usherProtobuf", "referenceGBFF", "referenceFasta", "metadataUrl", "title", "description", "icon", "maintainerMessage"]);
+
 const queryParamsToObject = (search) => {
   const params = {};
   new URLSearchParams(search).forEach((value, key) => {
-    params[key] = value;
+    if (!importParams.has(key)) params[key] = value;
   });
   return params;
 };
@@ -32,6 +34,13 @@ const useQueryAsState = (defaultValues = {}) => {
 
   const decodedSearch = useMemo(() => queryParamsToObject(search), [search]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    let changed = false;
+    for (const key of importParams) if (params.has(key)) { params.delete(key); changed = true; }
+    if (changed) navigate({ pathname, search: params.toString() }, { replace: true });
+  }, [search, pathname, navigate]);
+
   const updateRef = useRef({ decodedSearch, pathname });
   useEffect(() => {
     updateRef.current = { decodedSearch, pathname };
@@ -40,7 +49,7 @@ const useQueryAsState = (defaultValues = {}) => {
   const updateQuery = useCallback(
     (updatedParams, method = "push") => {
       const { pathname, decodedSearch } = updateRef.current;
-      const newParams = { ...decodedSearch, ...updatedParams };
+      const newParams = Object.fromEntries(Object.entries({ ...decodedSearch, ...updatedParams }).filter(([key]) => !importParams.has(key)));
 
       // Remove null values from the query parameters
       Object.keys(updatedParams).forEach((key) => {

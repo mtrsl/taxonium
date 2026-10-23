@@ -1,5 +1,6 @@
 export interface StatusData {
   type: "status";
+  importId?: number;
   data: {
     percentage?: number;
     message?: string | null;

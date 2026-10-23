@@ -519,7 +519,7 @@ const getVisibleTipCount = async ({ minY, maxY }) => {
   };
 };
 
-const attachEmbedding = async (upload, dataset, generation) => {
+const attachEmbedding = async (upload, dataset, generation, report = sendStatusMessage) => {
   const input = upload.embedding ?? (upload.embeddingUrl ? {
     status: "url_supplied", filename: upload.embeddingUrl, filetype: "dot",
   } : null);
@@ -529,8 +529,8 @@ const attachEmbedding = async (upload, dataset, generation) => {
   };
   if (!input) return;
   try {
-    sendStatusMessage({ message: "Parsing DOT embedding" });
-    const source = await fetch_or_extract(input, sendStatusMessage, "DOT embedding");
+    report({ message: "Parsing DOT embedding" });
+    const source = await fetch_or_extract(input, report, "DOT embedding");
     if (generation !== uploadGeneration) return;
     const config = {};
     generateConfig(config, dataset);
@@ -563,72 +563,47 @@ const attachEmbedding = async (upload, dataset, generation) => {
 onmessage = async (event) => {
   //Process uploaded data:
   const { data } = event;
-  if (data.type === "upload" && data.data?.filename) {
+  if (data.type === "upload") {
+    if (!data.data?.filename) return;
     processedUploadedData = undefined;
-    uploadGeneration++;
+    const generation = ++uploadGeneration;
+    for (const key of Object.keys(the_cache)) delete the_cache[key];
+    if (activeDensity) activeDensity.cancelled = true;
+    pendingDensity = null;
     if (pendingGeography) postMessage({ type: "geography", key: pendingGeography.key, data: { cancelled: true } });
+    pendingGeography = null;
     if (activeGeography) activeGeography.cancelled = true;
     if (pendingEmbedding) postMessage({ type: "embedding", key: pendingEmbedding.key, data: { cancelled: true } });
+    pendingEmbedding = null;
     if (activeEmbedding) activeEmbedding.cancelled = true;
-  }
-  const generation = uploadGeneration;
-  if (
-    data.type === "upload" &&
-    data.data &&
-    data.data.filename &&
-    data.data.filename.includes("jsonl")
-  ) {
-    const uploaded = await processJsonl(
-      data.data,
-      sendStatusMessage,
-      ReadableWebToNodeStream,
-      parser,
-      streamValues,
-      Buffer
-    );
-    if (generation !== uploadGeneration) return;
-    uploaded.metadataDensityIndex = createMetadataDensityIndex(uploaded.nodes);
-    await attachEmbedding(data.data, uploaded, generation);
-    if (generation !== uploadGeneration) return;
-    processedUploadedData = uploaded;
-
-  } else if (
-    data.type === "upload" &&
-    data.data &&
-    data.data.filename &&
-    (data.data.filetype === "nwk" || data.data.filetype === "nexus")
-  ) {
-    data.data.useDistances = true;
-    const uploaded = await processNewickAndMetadata(
-      data.data,
-      sendStatusMessage
-    );
-    if (generation !== uploadGeneration) return;
-    uploaded.metadataDensityIndex = createMetadataDensityIndex(uploaded.nodes);
-    await attachEmbedding(data.data, uploaded, generation);
-    if (generation !== uploadGeneration) return;
-    processedUploadedData = uploaded;
-  } else if (
-    data.type === "upload" &&
-    data.data &&
-    data.data.filename &&
-    data.data.filetype === "nextstrain"
-  ) {
-    const uploaded = await processNextstrain(
-      data.data,
-      sendStatusMessage
-    );
-    if (generation !== uploadGeneration) return;
-    uploaded.metadataDensityIndex = createMetadataDensityIndex(uploaded.nodes);
-    await attachEmbedding(data.data, uploaded, generation);
-    if (generation !== uploadGeneration) return;
-    processedUploadedData = uploaded;
-  } else if (data.type === "upload" && data.data && data.data.filename) {
-    sendStatusMessage({
-      error:
-        "Only Taxonium jsonl files are supported (could not find 'jsonl' in filename)",
-    });
+    const report = status => {
+      if (generation === uploadGeneration) postMessage({ type: "status", importId: data.importId, data: { phase: "processing", ...status } });
+    };
+    try {
+      report({ message: "Preparing dataset" });
+      let uploaded;
+      const filetype = data.data.filetype ?? (/\.jsonl(?:\.gz)?$/i.test(data.data.filename) ? "jsonl" : undefined);
+      if (filetype === "jsonl") {
+        uploaded = await processJsonl(data.data, report, ReadableWebToNodeStream, parser, streamValues, Buffer);
+      } else if (filetype === "nwk" || filetype === "nexus") {
+        uploaded = await processNewickAndMetadata({ ...data.data, useDistances: true }, report);
+      } else if (filetype === "nextstrain") {
+        uploaded = await processNextstrain(data.data, report);
+      } else {
+        throw new Error("Unsupported tree format. Choose Newick, Nexus, Nextstrain JSON or Taxonium JSONL.");
+      }
+      if (generation !== uploadGeneration) return;
+      if (!uploaded?.nodes?.length) throw new Error("The file does not contain a usable tree.");
+      uploaded.metadataDensityIndex = createMetadataDensityIndex(uploaded.nodes);
+      await attachEmbedding(data.data, uploaded, generation, report);
+      if (generation !== uploadGeneration) return;
+      processedUploadedData = uploaded;
+      report({ phase: "ready", message: "Dataset ready" });
+    } catch (error) {
+      report({ phase: "error", error: error?.message ?? "Unable to process dataset" });
+    }
   } else {
+    const generation = uploadGeneration;
     if (data.type === "query") {
       const result = await queryNodes(data.bounds);
       postMessage({ type: "query", data: result });

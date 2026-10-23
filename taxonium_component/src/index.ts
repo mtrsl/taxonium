@@ -3,3 +3,5 @@ import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 
 export default Taxonium;
 export { GlobalErrorBoundary };
+
+export type { ImportStatus } from "./types/backend";

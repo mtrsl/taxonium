@@ -44,3 +44,19 @@ it("loads gzip DOT coordinates from files and URLs with query strings", async ()
     expect(request).toHaveBeenCalledWith(url, expect.objectContaining({ responseType: "arraybuffer" }));
   } finally { request.mockRestore(); }
 });
+
+
+it("loads Nexus trees without a root label or branch length and rejects missing trees", async () => {
+  const input = { filename: "tree.nex", filetype: "nexus" as const, status: "loaded" as const,
+    data: "#NEXUS\nBegin trees;\nTree tree1 = (A:1,B:2);\nEnd;" };
+  const tree = await processNewick(input, () => {});
+  expect(tree.nodes.filter(node => node.is_tip).map(node => node.name).sort()).toEqual(["A", "B"]);
+  await expect(processNewick({ ...input, data: "#NEXUS\nBegin trees;\nEnd;" }, () => {})).rejects.toThrow("No tree found");
+});
+
+
+it("rejects empty Newick and parser-reported syntax errors", async () => {
+  for (const data of ["", "(A:1,B:2;", "A:1,B:2);", "(A[&broken:1,B:2);"]) {
+    await expect(processNewick({ filename: "bad.nwk", filetype: "nwk", status: "loaded", data }, () => {})).rejects.toThrow("Unable to parse the tree");
+  }
+});

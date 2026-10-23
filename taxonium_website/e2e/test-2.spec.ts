@@ -2,10 +2,10 @@ import { test, expect } from "@playwright/test";
 
 test("test", async ({ page }) => {
   await page.goto("http://localhost:4173/");
-  await page.locator('input[type="file"]').click();
   await page
     .locator('input[type="file"]')
     .setInputFiles("./data/tfci-taxonium-chron.jsonl");
+  await page.getByRole("button", { name: "Open dataset", exact: true }).click();
   await page.locator('input[name="treenomeEnabled"]').check();
   await page.locator('input[name="treenomeEnabled"]').uncheck();
   await page.getByLabel("Tree type:DistanceTime").selectOption("x_time");

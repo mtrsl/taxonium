@@ -1,8 +1,9 @@
 import type { GeographicRequest, GeographicResponse } from "../types/geography";
 import type { EmbeddingRequest, EmbeddingResponse } from "../types/embedding";
 import type { MetadataTableRequest, MetadataTableResponse } from "../types/metadataTable";
-import { useCallback, useMemo, useLayoutEffect, useState } from "react";
+import { useCallback, useMemo, useLayoutEffect, useState, useRef } from "react";
 import type {
+  ImportStatus,
   Config,
   NodesResponse,
   NodeDetails,
@@ -35,7 +36,10 @@ import workerSpec from "../webworkers/localBackendWorker.js?worker&inline";
 //const url = new URL('../webworkers/localBackendWorker.js', import.meta.url)
 //const getWorker = () => new Worker(url, { type: 'module' })
 
-const worker = new workerSpec();
+let worker = new workerSpec();
+let activeImportId = 0;
+let lastUpload: Record<string, unknown> | null = null;
+let owner: object | null = null;
 
 let onQueryReceipt: (receivedData: NodesResponse) => void = () => {};
 let onStatusReceipt: (receivedData: StatusData) => void = (receivedData) => {
@@ -77,10 +81,11 @@ let visibleTipCountSetters: Record<
   (data: VisibleTipCountResponse) => void
 > = {};
 
-worker.onmessage = (event: MessageEvent<LocalBackendMessage>) => {
+const receiveMessage = (event: MessageEvent<LocalBackendMessage>) => {
   const data = event.data;
   switch (data.type) {
     case "status":
+      if (data.importId !== undefined && data.importId !== activeImportId) break;
       onStatusReceipt(data);
       break;
     case "query":
@@ -127,18 +132,27 @@ worker.onmessage = (event: MessageEvent<LocalBackendMessage>) => {
   }
 };
 
+worker.onmessage = receiveMessage;
+
 function useLocalBackend(
-  uploaded_data: Record<string, unknown> | null
+  uploaded_data: Record<string, unknown> | null,
+  onImportStatus?: (status: ImportStatus) => void
 ): LocalBackend {
   const [statusMessage, setStatusMessage] = useState<
     | { percentage?: number; message?: string | null }
     | null
   >({ message: null });
+  const callback = useRef(onImportStatus);
+  callback.current = onImportStatus;
   onStatusReceipt = (receivedData) => {
-    if (receivedData.data.error) {
-      window.alert(receivedData.data.error);
-      console.log("ERROR33:", receivedData.data.error);
-    }
+    const status = receivedData.data;
+    const percentage = status.percentage === undefined ? undefined : Number(status.percentage);
+    if (status.error && !callback.current) window.alert(String(status.error));
+    callback.current?.({
+      phase: status.error ? "error" : status.phase === "ready" ? "ready" : "processing",
+      message: status.error ? String(status.error) : status.message ?? undefined,
+      percentage: Number.isFinite(percentage) ? percentage : undefined,
+    });
     const total_nodes = receivedData.data.total as number | undefined;
     if (total_nodes && total_nodes > 6000000) {
       if (1) {
@@ -157,10 +171,44 @@ function useLocalBackend(
     embeddingSetters.clear();
     metadataDensitySetters = {};
     visibleTipCountSetters = {};
-    worker.postMessage({
-      type: "upload",
-      data: uploaded_data,
-    });
+    if (!uploaded_data) return;
+    const token = {};
+    owner = token;
+    worker.onerror = event => {
+      if (owner !== token) return;
+      event.preventDefault();
+      onStatusReceipt({ type: "status", data: { error: event.message || "Unable to process dataset" } });
+    };
+    // Effect replay must not repost buffers which were already transferred.
+    if (lastUpload !== uploaded_data) {
+      lastUpload = uploaded_data;
+      activeImportId++;
+      const buffers = new Set<ArrayBuffer>();
+      if (uploaded_data.transferOwnership) {
+        for (const input of [uploaded_data, uploaded_data.metadata, uploaded_data.embedding]) {
+          const data = (input as { data?: unknown } | undefined)?.data;
+          if (data instanceof ArrayBuffer) buffers.add(data);
+        }
+      }
+      worker.postMessage({ type: "upload", data: uploaded_data, importId: activeImportId }, [...buffers]);
+    }
+    return () => {
+      owner = null;
+      // Defer termination across StrictMode's immediate effect replay.
+      queueMicrotask(() => {
+        if (owner !== null) return;
+        worker.onmessage = null;
+        worker.onerror = null;
+        worker.terminate();
+        worker = new workerSpec();
+        worker.onmessage = receiveMessage;
+        lastUpload = null;
+        activeImportId++;
+        detailsSetters.clear(); tableSetters.clear(); geographicSetters.clear(); embeddingSetters.clear();
+        searchSetters = {}; metadataDensitySetters = {}; visibleTipCountSetters = {};
+        onQueryReceipt = () => {}; onConfigReceipt = () => {}; onStatusReceipt = () => {}; onListReceipt = () => {};
+      });
+    };
   }, [uploaded_data]);
 
   const queryNodes = useCallback(

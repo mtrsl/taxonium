@@ -7,6 +7,26 @@ vi.mock("taxonium_data_handling/importing.js", () => ({
 }));
 
 describe("uploaded metadata worker", () => {
+  it("reports import failures, honours corrected types and suppresses stale completion", async () => {
+    vi.resetModules();
+    const sent: any[] = [];
+    vi.stubGlobal("postMessage", (message: unknown) => sent.push(message));
+    vi.stubGlobal("onmessage", null);
+    try {
+      await import("./localBackendWorker.js");
+      const send = (data: unknown) => (globalThis.onmessage as any)({ data });
+      await send({ type: "upload", importId: 1, data: { filename: "broken.json", filetype: "nextstrain", status: "loaded", data: "{broken" } });
+      expect(sent.at(-1)).toMatchObject({ type: "status", importId: 1, data: { phase: "error" } });
+      const fixture = { nodes: [{ node_id: 0, parent_id: 0, is_tip: true, name: "A", y: 0, mutations: [] }], mutations: [], overwrite_config: {} };
+      let finish!: (value: unknown) => void;
+      const stale = send({ type: "upload", importId: 2, data: { filename: "unknown.data", filetype: "jsonl", fixture: new Promise(resolve => { finish = resolve; }) } });
+      await send({ type: "upload", importId: 3, data: { filename: "unknown.data", filetype: "jsonl", fixture } });
+      expect(sent.at(-1)).toMatchObject({ importId: 3, data: { phase: "ready" } });
+      finish(fixture); await stale;
+      expect(sent.filter(message => message.importId === 2 && message.data.phase === "ready")).toHaveLength(0);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it("pages real worker requests, echoes request IDs and rebuilds the lazy index on replacement", async () => {
     vi.resetModules();
     const sent: any[] = [];

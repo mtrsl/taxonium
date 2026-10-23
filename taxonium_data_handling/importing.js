@@ -126,15 +126,13 @@ export const setUpStream = (
     data.nodes = [];
     data.node_to_mut = {};
   });
-  headerPipeline.on("error", (err) => {
-    console.error("Header parser error:", err);
-  });
 
   // Data parser for the rest of the stream
   let lineBuffer = "";
   let line_number = 0;
   const dataParser = new stream.Writable({
     write(chunk, encoding, callback) {
+      try {
       const chunkStr = chunk.toString();
       let start = 0;
       let end = chunkStr.indexOf("\n");
@@ -150,12 +148,15 @@ export const setUpStream = (
 
       lineBuffer += chunkStr.slice(start);
       callback();
+      } catch (error) { callback(error); }
     },
     final(callback) {
+      try {
       if (lineBuffer) {
         processLine(lineBuffer, line_number);
       }
       callback();
+      } catch (error) { callback(error); }
     },
   });
 
@@ -185,15 +186,17 @@ export const setUpStream = (
   chunkCounterStream.pipe(headerParser);
   const splitter = new StreamSplitter(chunkCounterStream, dataParser);
 
-  // Pipe the input stream through the splitter
-  the_stream
-    .pipe(splitter)
-    .on("error", (err) => console.error("Splitter error:", err));
-
-  // Handle the completion of the dataParser
-  dataParser.on("finish", () => {
-    console.log("Finished processing the stream");
+  // Reject parser/decompression failures instead of leaving imports waiting forever.
+  const completion = new Promise((resolve, reject) => {
+    for (const source of [the_stream, splitter, chunkCounterStream, headerParser, headerPipeline, dataParser]) {
+      source.on("error", reject);
+    }
+    dataParser.on("finish", resolve);
   });
+  // Feeding a loaded buffer can fail synchronously before processJsonl awaits it.
+  completion.catch(() => {});
+  the_stream.pipe(splitter);
+  return completion;
 };
 
 export const processJsonl = async (
@@ -218,7 +221,7 @@ export const processJsonl = async (
     the_stream = new stream.PassThrough();
   }
   let new_data = {};
-  setUpStream(the_stream, new_data, sendStatusMessage, parser, streamValues);
+  const completion = setUpStream(the_stream, new_data, sendStatusMessage, parser, streamValues);
 
   if (status === "loaded") {
     const dataAsArrayBuffer = data;
@@ -258,11 +261,8 @@ export const processJsonl = async (
     throw new Error("Unknown status: " + status);
   }
 
-  // Wait for the stream to finish
-  await new Promise((resolve, reject) => {
-    the_stream.on("end", resolve);
-    the_stream.on("error", reject);
-  });
+  await completion;
+  if (!new_data.header || !new_data.nodes?.length) throw new Error("Taxonium JSONL must contain a header and tree nodes.");
   console.log("done with stream");
 
   const scale_y =

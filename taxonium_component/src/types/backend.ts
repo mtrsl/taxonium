@@ -155,6 +155,12 @@ export interface VisibleTipCountResponse {
   visibleTipCount: number;
 }
 
+export interface ImportStatus {
+  phase: "processing" | "ready" | "error";
+  message?: string;
+  percentage?: number;
+}
+
 export interface StatusMessage {
   percentage?: number;
   message?: string | null;

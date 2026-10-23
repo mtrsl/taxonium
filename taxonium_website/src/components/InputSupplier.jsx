@@ -1,283 +1,36 @@
-import { useState, useCallback } from "react";
-import { BsTrash, BsQuestionCircle } from "react-icons/bs";
+import { useRef } from "react";
 import { Button, Select } from "./Basic";
-import { BiFile, BiLink } from "react-icons/bi";
 
-function formatBytes(bytes, decimals = 2) {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
-}
+const prettyTypes = { jsonl: "Taxonium JSONL", nwk: "Newick tree", nexus: "Nexus tree", nextstrain: "Nextstrain JSON", meta_csv: "Metadata CSV", meta_tsv: "Metadata TSV", dot: "DOT embedding", unknown: "Choose file type", unsupported: "Unsupported protobuf" };
 
-const prettyTypes = {
-  jsonl: "Taxonium JSONL",
-  nwk: "Newick tree",
-  nexus: "Nexus tree",
-  meta_tsv: "Metadata TSV",
-  meta_csv: "Metadata CSV",
-  nextstrain: "Nextstrain JSON",
-  dot: "DOT embedding coordinates",
-  unknown: "Unknown (please select)",
-};
-const fileTypes = Object.keys(prettyTypes);
-
-export const InputSupplier = ({ inputHelper, className }) => {
-  const [tempURL, setTempURL] = useState("");
-  const [useProxy, setUseProxy] = useState(false); // New state for proxy usage
-
-  const { inputs, setInputs } = inputHelper;
-  const [addingText, setAddingText] = useState(false);
-  const [text, setText] = useState("");
-
-  const addFromTempURL = useCallback(() => {
-    let finalURL = tempURL;
-    if (useProxy) {
-      finalURL = `https://proxy.taxonium.org/proxy?url=${encodeURIComponent(
-        tempURL
-      )}`;
-    }
-    if (finalURL) {
-      inputHelper.addFromURL(finalURL);
-      setTempURL("");
-    }
-  }, [tempURL, useProxy, inputHelper]); // Include useProxy in the dependency array
-
-  return (
-    <div className={className}>
-      {inputs.length > 0 && <h2>Input files</h2>}
-      {inputs.map((input, index) => {
-        return (
-          <div key={index} className="p-3 m-3 border  text-sm">
-            <div>
-              <div className="inline-block">
-                {input.supplyType === "file" ? <BiFile /> : <BiLink />}
-              </div>
-              {input.name}
-              {input.size ? (
-                <span className="text-xs text-gray-500">
-                  ({formatBytes(input.size)})
-                </span>
-              ) : (
-                ""
-              )}
-            </div>
-            <div>
-              <Select
-                value={input.filetype}
-                className="border p-1 mr-4 text-sm"
-                onChange={(e) => {
-                  setInputs(
-                    inputs.map((input, the_index) => {
-                      if (the_index === index) {
-                        input.filetype = e.target.value;
-                      }
-                      return input;
-                    })
-                  );
-                }}
-              >
-                {fileTypes.map((filetype, index) => {
-                  return (
-                    <option key={index} value={filetype}>
-                      {prettyTypes[filetype]}
-                    </option>
-                  );
-                })}
-              </Select>
-
-              <Button
-                className="inline-block bg-gray-100 text-sm mx-auto p-1 rounded border-gray-300 border m-5 text-gray-700"
-                onClick={() => {
-                  inputHelper.removeInput(index);
-                }}
-              >
-                <BsTrash className="inline-block mx-1" />
-              </Button>
-            </div>{" "}
-            {input.filetype === "nwk" && (
-              <div>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={input.ladderize}
-                    className="mr-1"
-                    onChange={(e) => {
-                      setInputs(
-                        inputs.map((input, this_index) => {
-                          if (this_index === index) {
-                            input.ladderize = e.target.checked;
-                          }
-                          return input;
-                        })
-                      );
-                    }}
-                  />{" "}
-                  Ladderize tree
-                </label>{" "}
-                <button
-                  style={{ cursor: "default" }}
-                  data-tooltip-id="global-tooltip"
-                  data-tooltip-content="Ladderizing will preserve the tree's topology, but sort the nodes according to how many descendants they have"
-                >
-                  <span
-                    style={{
-                      display: "inline-block",
-                      verticalAlign: "middle",
-                    }}
-                  >
-                    <BsQuestionCircle />
-                  </span>
-                </button>
-              </div>
-            )}
-            {input.filetype.startsWith("meta_") && (
-              <div className="text-italic">
-                The left-most column in your metadata must be the name of the
-                taxon.
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {inputs.length > 0 && inputHelper.validityMessage && (
-        <div>
-          <div className="text-red-500">{inputHelper.validityMessage}</div>
-        </div>
-      )}
-      {inputs.length > 0 && inputHelper.validity === "valid" && (
-        <div className="border-b mb-2">
-          <div>
-            <Button
-              className="text-md p-3 mb-6 font-bold"
-              onClick={() => {
-                inputHelper.finaliseInputs();
-              }}
-            >
-              Launch Taxonium
-            </Button>
-          </div>
-        </div>
-      )}
-      <div className="mb-3">
-        Select, drag-and-drop, or enter the URL for tree or metadata files
-        (jsonl, newick, nextstrain, dot, tsv, etc.):
-      </div>
-      {!addingText && (
-        <>
-          <div>
-            <label className="tx-button border border-gray-400 shadow-sm rounded py-1 px-2 bg-gray-100 hover:bg-gray-200 text-sm text-gray-700 cursor-pointer mb-3 inline-block">
-              Choose files
-              <input
-                className="hidden"
-                type="file"
-                multiple="multiple"
-                onChange={(e) => {
-                  for (const file of e.target.files) {
-                    inputHelper.readFile(file);
-                  }
-
-                  // empty this
-                  e.target.value = "";
-                }}
-              />
-            </label>
-            <span className="ml-2 text-sm text-gray-600">
-              {inputs.length === 0
-                ? "No files chosen"
-                : `${inputs.length} file${inputs.length > 1 ? "s" : ""} chosen`}
-            </span>
-          </div>
-          <div>
-            <input
-              placeholder="https://"
-              type="text"
-              value={tempURL}
-              className="border p-1 mr-1 text-sm "
-              onChange={(e) => {
-                setTempURL(e.target.value);
-              }}
-              onKeyUp={(e) => {
-                if (e.key === "Enter") {
-                  addFromTempURL();
-                }
-              }}
-            />{" "}
-            {tempURL !== "" && (
-              <>
-                <span className="mr-2 text-sm text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={useProxy}
-                    className=""
-                    onChange={(e) => setUseProxy(e.target.checked)}
-                  />{" "}
-                  Use Proxy
-                </span>
-              </>
-            )}
-            <Button onClick={addFromTempURL} className="">
-              Add
-            </Button>
-          </div>
-        </>
-      )}
-      <div className="mt-3">
-        <div className="text-xs text-gray-500">
-          {addingText ? (
-            <>
-              <div>
-                <textarea
-                  className="border p-1 mr-1 text-sm md:w-1/2 w-full"
-                  placeholder="Paste e.g. Newick tree here.."
-                  onChange={(e) => {
-                    setText(e.target.value);
-                  }}
-                  value={text}
-                />
-                <div className="mt-2">
-                  <button
-                    className="background-gray-100 text-sm p-1 rounded border-gray-300 border  text-gray-700"
-                    onClick={() => {
-                      inputHelper.addFromText(text);
-                      setAddingText(false);
-                      setText("");
-                    }}
-                  >
-                    Add
-                  </button>{" "}
-                  <button
-                    className="background-gray-100 text-sm p-1 rounded border-gray-300 border ml-3 text-gray-700"
-                    onClick={() => {
-                      setAddingText(false);
-                      setText("");
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="text-sm">
-              ..or use{" "}
-              <button
-                className="text-gray-700 hover:text-gray-700 hover:underline"
-                onClick={() => {
-                  setAddingText(true);
-                }}
-              >
-                text entry
-              </button>
-              .
-            </div>
-          )}
-        </div>
-      </div>
+export default function InputSupplier({ inputHelper }) {
+  const picker = useRef(null);
+  const { inputs, setInputs, status } = inputHelper;
+  const reading = status.phase === "reading";
+  const change = (index, values) => setInputs(previous => previous.map((input, i) => i === index ? { ...input, ...values } : input));
+  return <section aria-label="Local dataset files" className="max-w-3xl mx-auto w-full space-y-4">
+    <div className="border-2 border-dashed border-sky-500 rounded-lg bg-sky-50 p-6 sm:p-10 text-center">
+      <h1 className="font-bold text-xl mb-3">Open a local dataset</h1>
+      <p className="mb-4">Drop your tree and optional metadata and DOT embedding files here.</p>
+      <button type="button" disabled={reading} className="tx-button border rounded px-4 py-2 bg-white disabled:opacity-50" onClick={() => picker.current.click()}>Choose files</button>
+      <input ref={picker} aria-label="Choose local files" type="file" multiple className="hidden" onChange={event => { inputHelper.addFiles(event.target.files); event.target.value = ""; }} />
+      <p className="text-sm text-gray-600 mt-4">Newick, Nexus, Nextstrain JSON or Taxonium JSONL, with optional CSV/TSV metadata and DOT coordinates. Gzip files are supported.</p>
     </div>
-  );
-};
-
-export default InputSupplier;
+    <fieldset disabled={reading} className="space-y-3 min-w-0">
+      {inputs.length > 0 && <legend className="font-semibold mb-2">Selected files</legend>}
+      {inputs.map((input, index) => <div key={index} className="border rounded p-3 text-sm space-y-2">
+        <p className="break-all font-medium">{input.name} <span className="text-gray-500 font-normal">({new Intl.NumberFormat().format(input.size)} bytes)</span></p>
+        <div className="flex flex-wrap gap-2 items-center">
+          <Select aria-label={`File type for ${input.name}`} value={input.filetype} disabled={input.filetype === "unsupported"} onChange={event => change(index, { filetype: event.target.value })}>
+            {Object.entries(prettyTypes).filter(([type]) => type !== "unsupported" || input.filetype === "unsupported").map(([type, name]) => <option key={type} value={type}>{name}</option>)}
+          </Select>
+          <Button aria-label={`Remove ${input.name}`} onClick={() => inputHelper.removeInput(index)}>Remove</Button>
+        </div>
+        {input.filetype === "nwk" && <label className="block"><input type="checkbox" checked={input.ladderize} onChange={event => change(index, { ladderize: event.target.checked })} className="mr-2" />Ladderize tree</label>}
+        {input.filetype.startsWith("meta_") && <p>The first metadata column must contain the sample names used in the tree.</p>}
+      </div>)}
+      {inputs.length > 0 && inputHelper.validityMessage && <p role="alert" className="text-red-700">{inputHelper.validityMessage}</p>}
+      <button type="button" disabled={!!inputHelper.validityMessage} onClick={inputHelper.finaliseInputs} className="tx-button border rounded px-4 py-2 bg-sky-100 disabled:opacity-50">Open dataset</button>
+    </fieldset>
+  </section>;
+}

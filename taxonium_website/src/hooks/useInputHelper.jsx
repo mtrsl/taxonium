@@ -1,309 +1,87 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
-function guessIfCompressed(file_object) {
-  //return true if gzipped and false if not
-  const file_type = file_object.type;
-  const file_name = file_object.name.toLowerCase().split(/[?#]/, 1)[0];
-  if (file_type === "application/gzip" || file_name.endsWith(".gz")) {
-    return true;
-  }
-  return false;
+export function guessType(file) {
+  const extension = file.name.toLowerCase().replace(/\.gz$/, "").split(".").pop();
+  if (["nwk", "newick", "contree", "tree", "tre", "nh", "phy", "nw", "treefile", "rooted"].includes(extension)) return "nwk";
+  return ({ nexus: "nexus", nex: "nexus", jsonl: "jsonl", dot: "dot", csv: "meta_csv", tsv: "meta_tsv", json: "nextstrain", pb: "unsupported" })[extension] || "unknown";
 }
 
-function guessType(file_object) {
-  // first strip off any gz from the end of lowercase name and get extension
-  const file_name = file_object.name.toLowerCase().split(/[?#]/, 1)[0].replace(/\.gz$/, "");
-  const file_extension = file_name.split(".").pop();
-
-  const tree_extensions = [
-    "nwk",
-    "newick",
-    "contree",
-    "tree",
-    "tre",
-    "nh",
-    "phy",
-    "nw",
-    "treefile",
-    "rooted",
-  ];
-
-  if (tree_extensions.includes(file_extension)) {
-    return "nwk";
-  }
-
-  if (file_extension === "nexus" || file_extension === "nex") {
-    return "nexus";
-  }
-
-  if (file_extension === "jsonl") {
-    return "jsonl";
-  }
-  if (file_extension === "dot") {
-    return "dot";
-  }
-  if (file_extension === "csv") {
-    return "meta_csv";
-  }
-  if (file_extension === "tsv") {
-    return "meta_tsv";
-  }
-  if (file_extension === "json") {
-    return "nextstrain";
-  } else {
-    return "unknown";
-  }
+export function validateInputs(inputs) {
+  if (!inputs.length) return "Choose a tree or Taxonium JSONL file to begin.";
+  if (inputs.some(input => input.filetype === "unsupported")) return "Taxonium V1 protobuf files are not supported. Remove the file and select a supported tree format.";
+  if (inputs.some(input => input.filetype === "unknown")) return "Select the type of each unrecognised file.";
+  const count = type => inputs.filter(input => type.includes(input.filetype)).length;
+  const trees = count(["nwk", "nexus", "nextstrain"]);
+  const jsonl = count(["jsonl"]);
+  const metadata = count(["meta_csv", "meta_tsv"]);
+  if (trees + jsonl > 1) return "Choose only one tree or Taxonium JSONL file.";
+  if (metadata > 1) return "Choose only one metadata file.";
+  if (count(["dot"]) > 1) return "Choose only one DOT embedding file.";
+  if (jsonl && metadata) return "Taxonium JSONL accepts only an optional DOT embedding file.";
+  if (!trees && !jsonl) return "Add a tree or Taxonium JSONL file to go with these attachments.";
+  return "";
 }
 
-export const useInputHelper = ({
-  setUploadedData,
-  updateQuery,
-  query,
-  uploadedData,
-}) => {
+export function useInputHelper({ setUploadedData }) {
   const [inputs, setInputs] = useState([]);
+  const [status, setStatus] = useState({ phase: "staging" });
+  const generation = useRef(0);
+  const reader = useRef(null);
+  const busy = useRef(false);
+  useEffect(() => () => { generation.current++; reader.current?.abort(); }, []);
 
-  function addInput(file_object, data) {
-    if (window.gtag) {
-      window.gtag("event", "addInput", {
-        event_category: "addInput",
-        event_label: file_object.name,
-      });
-    }
-    const gzipped = guessIfCompressed(file_object);
-    const filetype = guessType(file_object);
-    setInputs((inputs) => [
-      ...inputs,
-      {
-        name: file_object.name,
-        data: data,
-        mimetype: file_object.type,
-        size: file_object.size,
-        filetype: filetype,
-        gzipped: gzipped,
-        supplyType: file_object.supplyType,
-        ladderize: true,
-      },
-    ]);
-  }
-
-  function readFile(file) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      //setUploadedData(reader.result);
-
-      if (file.name.includes(".pb")) {
-        // V1 format
-        window.alert(
-          "It looks like you are trying to load a Taxonium V1 proto. We will now redirect you to the V1 site. Please retry the upload from there."
-        );
-        window.location.href =
-          "https://cov2tree-git-v1-theosanderson.vercel.app/";
-      } else {
-        const result = reader.result;
-        file.supplyType = "file";
-        addInput(file, result);
-      }
-    };
-
-    reader.readAsArrayBuffer(file);
-  }
-
-  const [validity, validityMessage] = useMemo(() => {
-    if (inputs.length === 0) {
-      return ["invalid", "No files selected"];
-    }
-
-    const jsonlCount = inputs.filter((input) => input.filetype === "jsonl").length;
-    const dotCount = inputs.filter((input) => input.filetype === "dot").length;
-    const treeCount = inputs.filter((input) => ["nwk", "nexus", "nextstrain"].includes(input.filetype)).length;
-    if (jsonlCount > 1) return ["invalid", "You can only use one Taxonium JSONL file"];
-    if (dotCount > 1) return ["invalid", "You can only use one DOT embedding file"];
-    // can't have more than one metadata file
-    if (
-      inputs.filter((input) => input.filetype.startsWith("meta_")).length > 1
-    ) {
-      return ["invalid", "You can only use a single metadata file"];
-    }
-    // Only one tree may be paired with metadata and an optional embedding.
-    if (treeCount > 1) {
-      return ["invalid", "You can only use a single tree file"];
-    }
-    if (jsonlCount && (treeCount > 0 || inputs.some((input) => !["jsonl", "dot"].includes(input.filetype)))) {
-      return ["invalid", "Taxonium JSONL accepts only one optional DOT embedding file"];
-    }
-    if (inputs.some((input) => input.filetype === "unknown")) {
-      return ["invalid", "Please select the type of each file"];
-    }
-    // must have a tree file or a jsonl
-    if (
-      jsonlCount === 0 &&
-      inputs.filter(
-        (input) => input.filetype === "nwk" || input.filetype === "nexus"
-      ).length === 0 &&
-      inputs.filter((input) => input.filetype === "nextstrain").length === 0
-    ) {
-      return [
-        "invalid",
-        "You must also add a tree file to go with your metadata",
-      ];
-    }
-    if (dotCount && jsonlCount === 0 && treeCount === 0) {
-      return ["invalid", "A DOT embedding must be paired with a tree or Taxonium JSONL file"];
-    }
-    return ["valid", ""];
-  }, [inputs]);
-
-  function removeInput(index) {
-    setInputs(inputs.filter((_, i) => i !== index));
-  }
-
-  function addFromURL(url) {
-    const file_obj = { name: url, supplyType: "url" };
-
-    addInput(file_obj);
-  }
-
-  function addFromText(text) {
-    const file_obj = { name: "text.nwk", supplyType: "file" };
-    file_obj.filetype = "nwk";
-    file_obj.data = text;
-    addInput(file_obj, text);
-  }
-
-  const finaliseInputs = useCallback(() => {
-    const embedding_file = inputs.find((input) => input.filetype === "dot");
-    const embeddingUpload = embedding_file
-      ? embedding_file.supplyType === "url"
-        ? { embeddingUrl: embedding_file.name }
-        : { embedding: { filename: embedding_file.name, data: embedding_file.data, status: "loaded", filetype: "dot" } }
-      : {};
-    // if everything is a URL:
-    if (inputs.every((input) => input.supplyType === "url")) {
-      // if the input is a taxonium file
-      const jsonl_file = inputs.find((input) => input.filetype === "jsonl");
-      if (jsonl_file) {
-        updateQuery({ protoUrl: jsonl_file.name, ...(embedding_file ? { embeddingUrl: embedding_file.name } : {}) });
-      } else {
-        const meta_file = inputs.find((input) =>
-          input.filetype.startsWith("meta_")
-        );
-        const tree_file = inputs.find(
-          (input) =>
-            input.filetype === "nwk" ||
-            input.filetype === "nextstrain" ||
-            input.filetype === "nexus"
-        );
-        const newQuery = {
-          treeUrl: tree_file.name,
-          ladderizeTree: tree_file.ladderize === true,
-          treeType: tree_file.filetype,
-        };
-        if (meta_file) {
-          newQuery.metaUrl = meta_file.name;
-          newQuery.metaType = meta_file.filetype;
-        }
-        if (embedding_file) newQuery.embeddingUrl = embedding_file.name;
-        updateQuery(newQuery);
-      }
-    } else {
-      const jsonl_file = inputs.find((input) => input.filetype === "jsonl");
-      if (jsonl_file) {
-        setUploadedData({
-          status: jsonl_file.supplyType === "url" ? "url_supplied" : "loaded",
-          filename: jsonl_file.name,
-          data: jsonl_file.data,
-          filetype: jsonl_file.filetype,
-          ...embeddingUpload,
-        });
-        return;
-      }
-
-      const upload_obj = {};
-      // if there is some metadata find it
-      const meta_file = inputs.find((input) =>
-        input.filetype.startsWith("meta_")
-      );
-      if (meta_file) {
-        upload_obj.metadata = {
-          filename: meta_file.name,
-          data: meta_file.data,
-          status: meta_file.supplyType === "url" ? "url_supplied" : "loaded",
-          filetype: meta_file.filetype,
-        };
-      }
-
-      // if there is a tree file find it
-      const tree_file = inputs.find(
-        (input) =>
-          input.filetype === "nwk" ||
-          input.filetype === "nextstrain" ||
-          input.filetype === "nexus"
-      );
-
-      upload_obj.filename = tree_file.name;
-      upload_obj.data = tree_file.data;
-      upload_obj.status =
-        tree_file.supplyType === "url" ? "url_supplied" : "loaded";
-      upload_obj.filetype = tree_file.filetype;
-      upload_obj.ladderize = tree_file.ladderize;
-      Object.assign(upload_obj, embeddingUpload);
-      setUploadedData(upload_obj);
-    }
-  }, [inputs, updateQuery, setUploadedData]);
-
-  useEffect(() => {
-    // if there is a single file and it is a jsonl file, then finalise
-    if (inputs.length === 1 && inputs[0].filetype === "jsonl") {
-      finaliseInputs();
-    }
-  }, [inputs, finaliseInputs]);
-
-  useEffect(() => {
-    if (query.protoUrl && !uploadedData) {
-      setUploadedData({
-        status: "url_supplied",
-        filename: query.protoUrl,
-        filetype: "jsonl",
-        ...(query.embeddingUrl ? { embeddingUrl: query.embeddingUrl } : {}),
-      });
-    }
-    if (query.treeUrl && !uploadedData) {
-      console.log("tree url set");
-      const extra = {};
-      if (query.metaUrl) {
-        extra.metadata = {
-          filename: query.metaUrl,
-          filetype: query.metaType
-            ? query.metaType
-            : query.metaUrl.includes("csv")
-            ? "meta_csv"
-            : "meta_tsv",
-          status: "url_supplied",
-          taxonColumn: query.taxonColumn,
-        };
-      }
-      setUploadedData({
-        status: "url_supplied",
-        filename: query.treeUrl,
-        ladderize: query.ladderizeTree === "true",
-        filetype: query.treeType ? query.treeType : "nwk",
-        ...(query.embeddingUrl ? { embeddingUrl: query.embeddingUrl } : {}),
-        ...extra,
-      });
-    }
-  }, [query, setUploadedData, uploadedData]);
-
-  return {
-    inputs,
-    setInputs,
-    readFile,
-    removeInput,
-    addInput,
-    addFromURL,
-    addFromText,
-    finaliseInputs,
-    validity,
-    validityMessage,
+  const addFiles = files => {
+    if (busy.current) return;
+    const batch = Array.from(files).map(file => ({ file, name: file.name, size: file.size, filetype: guessType(file), ladderize: true }));
+    setInputs(previous => [...previous, ...batch]);
+    setStatus({ phase: "staging" });
   };
-};
+  const validityMessage = validateInputs(inputs);
+  const finaliseInputs = async () => {
+    if (validityMessage || busy.current) return;
+    busy.current = true;
+    const current = ++generation.current;
+    setUploadedData(null);
+    setStatus({ phase: "reading", message: "Reading selected files" });
+    const loaded = [];
+    try {
+      for (const input of inputs) {
+        const data = await new Promise((resolve, reject) => {
+          const nextReader = new FileReader();
+          reader.current = nextReader;
+          nextReader.onprogress = event => {
+            if (generation.current === current) setStatus({ phase: "reading", message: `Reading ${input.name}`, percentage: event.lengthComputable ? event.loaded / event.total * 100 : undefined });
+          };
+          nextReader.onload = () => resolve(nextReader.result);
+          nextReader.onerror = () => reject(new Error(`Unable to read ${input.name}: ${nextReader.error?.message || "file access failed"}`));
+          nextReader.onabort = () => reject(new Error("File reading cancelled"));
+          nextReader.readAsArrayBuffer(input.file);
+        });
+        if (generation.current !== current) return;
+        loaded.push({ filename: input.name, filetype: input.filetype, ladderize: input.ladderize, status: "loaded", data });
+      }
+      const tree = loaded.find(input => ["nwk", "nexus", "nextstrain", "jsonl"].includes(input.filetype));
+      setStatus({ phase: "processing", message: "Preparing dataset" });
+      setUploadedData({ ...tree, metadata: loaded.find(input => input.filetype.startsWith("meta_")), embedding: loaded.find(input => input.filetype === "dot"), transferOwnership: true });
+    } catch (error) {
+      if (generation.current === current) {
+        busy.current = false;
+        setStatus({ phase: "error", message: error.message });
+      }
+    } finally { if (generation.current === current) reader.current = null; }
+  };
+  const onImportStatus = useCallback(next => {
+    if (next.phase === "error") { busy.current = false; setUploadedData(null); }
+    setStatus(next);
+  }, [setUploadedData]);
+  const returnToFiles = (clear = false) => {
+    generation.current++;
+    reader.current?.abort();
+    reader.current = null;
+    busy.current = false;
+    setUploadedData(null);
+    if (clear) setInputs([]);
+    setStatus({ phase: "staging" });
+  };
+  return { inputs, setInputs, addFiles, removeInput: index => setInputs(previous => previous.filter((_, i) => i !== index)), validityMessage, finaliseInputs, status, onImportStatus, returnToFiles };
+}

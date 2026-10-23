@@ -155,6 +155,7 @@ export async function processNewick(
   if (data.filetype == "nexus") {
     const result = nexusToNewick(the_data);
     the_data = result.newick;
+    if (!the_data.trim()) throw new Error("No tree found in the Nexus file.");
   }
 
   sendStatusMessage({
@@ -172,6 +173,9 @@ export async function processNewick(
   the_data = the_data.replaceAll("\r", "");
 
   const tree: any = kn_parse(the_data);
+  if (!tree.root || tree.error) {
+    throw new Error("Unable to parse the tree. Check for an empty file or unmatched parentheses or brackets.");
+  }
 
   // Iterative post-order traversal to assign num_tips (avoids stack overflow)
   function assignNumTips(root: any): number {

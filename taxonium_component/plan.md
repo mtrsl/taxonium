@@ -8,41 +8,31 @@ Do not automatically begin Next Task or other backlog items.
 
 # Current Status
 
-**Phase:** Complementary visualisations
-**Status:** COMP-02 and its unified bottom-panel extension are complete. COMP-01, VIS-01 and META-01–04 remain complete.
+**Phase:** Final application improvements
+**Status:** APP-01 complete. COMP-02, COMP-01, VIS-01 and META-01–04 remain complete.
 
-Metadata table, Map and Embedding now share one resizable Data views disclosure, initially expanded on Metadata table. URL-backed `bottomView` selects the tab. Rendering resources are recreated on activation while table choices, paging, scroll position and spatial cameras persist. Embedding controls use application button styling and count readouts are removed; internal diagnostics and sample/aggregate tooltips remain. The viewer uses the available host height, with tree-container measurements tracking layout changes.
+The website now opens local datasets through a drop zone/file picker and explicit review/Open workflow. Hosted catalogs, redirects, URL/proxy imports and pasted text are removed. Files remain unread until Open, buffers transfer to the existing worker, and progress/errors support retry or return to files. Open another dataset releases the previous viewer and its workers. The component HTTP/URL APIs and shared visualization state remain available.
 
-Type checking, 78 tests and component/website builds pass. Real-fixture Chrome checks pass for both orientations, options visibility, short/narrow windows, state retention, GPU/hover picking and URL defaults. Existing bundler warnings remain. Worker processing is unchanged by this extension; performance benchmarks are not repeated.
+Type checking, 86 component tests, nine APP-01 browser tests and both builds pass. Real-fixture linked-view checks and the 2,399,238-tip compressed import/replacement check pass. Existing bundler warnings remain; no APP-01 blockers. APP-02 and Electron packaging are unstarted.
 
 # Current Task
 
-## COMP-02 — Unified bottom panel and embedding fixes
+## APP-01 — Local-only dataset loading
 
-Extend the completed optional DOT embedding work with a unified Metadata table · Map · Embedding bottom panel. Preserve shared selection and metadata colours, retain inactive view state, cancel inactive queries, repair embedding rendering after tab switches and fill the remaining viewer area. The original upload/parser/worker work remains complete.
+Implement the approved local-file landing page, explicit review/Open workflow, remote-entry cleanup, memory-conscious import lifecycle and browser validation.
 
 ### Checklist
 
-- [x] Accept an optional DOT attachment for supported tree uploads and parse coordinates robustly in the local worker.
-- [x] Extract shared spatial grouping and metadata summary/rendering operations while retaining geographic and Cartesian adapters.
-- [x] Add cancellable bounded local embedding queries and a responsive DeckGL Embedding tab beside Map.
-- [x] Validate fixtures, parser edge cases, upload variants, browser interactions, performance and existing spatial/tree behavior.
-- [x] Run types, relevant tests, component/website builds and browser checks; record results accurately.
-- [x] Record decisions, blockers, status and handoff.
-
-### Approved extension
-
-- [x] Combine Metadata table, Map and Embedding in an expanded Data views disclosure with shared resizing and a 300px default capped at half the viewer.
-- [x] Replace spatialView with URL-backed bottomView; default to Metadata table and disable unavailable embedding.
-- [x] Retain table/camera state, cancel inactive queries and reset dataset-specific state on replacement.
-- [x] Reproduce and fix embedding disappearance; style controls and remove embedding count readouts.
-- [x] Fill remaining viewer space and validate both orientations, options visibility and narrow/short windows.
-- [x] Complete component tests, real-fixture rendering/picking checks, types, full tests and both builds.
-- [x] Record final status, decisions, validation and handoff.
+- [x] Replace website remote dataset selection/imports with accessible file staging and explicit Open dataset.
+- [x] Preserve formats, metadata/DOT attachments and visualization query settings; remove obsolete hosted-dataset configuration.
+- [x] Add sequential file reading, transfer ownership, import status/error recovery and dataset cleanup.
+- [x] Test import lifecycle, compatibility, format variants and real browser interactions including large compressed input.
+- [x] Run component types/tests/build, website build and relevant browser tests; record outcomes.
+- [x] Update Design Notes, Current Status, Session Log and handoff.
 
 # Next Task
 
-Await user prioritisation after COMP-02; do not automatically start another backlog task.
+Await user prioritisation after APP-01; APP-02 is not automatically authorised.
 
 ---
 
@@ -332,6 +322,8 @@ Do not begin these tasks automatically.
 
 ### APP-01 — Local-only dataset loading
 
+**Status:** Complete (2026-10-23); see Current Task, Design Notes and Session Log.
+
 Remove the remote server dataset selection functionality and make local file loading through drag and drop the primary method for opening datasets.
 
 Requirements:
@@ -364,6 +356,8 @@ Requirements:
 - Remove the application logo.
 - Remove the tree selector.
 - Remove the GitHub links from the application interface.
+- Keep the 'Open another dataset' button, move it to the options tab on
+  the right.
 - Allow the main visualisation area to use the additional vertical space.
 - Ensure the layout resizes correctly when the browser window changes size.
 - Preserve access to essential controls, including local dataset loading and visualisation settings.
@@ -457,6 +451,20 @@ The project is complete when:
 ---
 
 # Design Notes
+
+## APP-01 — Implemented decisions (2026-10-23)
+
+- Local uploads retain the existing browser worker. HTTP backend and reusable component URL support remain available; no new localhost server or Electron APIs.
+- Website input is files only, with explicit review/Open for every format (including JSONL); URL/proxy, pasted text, hosted catalog and legacy redirects are removed.
+- Existing header remains except its hosted-tree selector; Open another dataset releases the old viewer before replacement.
+- Stage File references, read sequentially only on Open and transfer buffers to avoid another full input copy. Keep File references for retry.
+- Preserve visualization query settings while stripping website remote/import parameters. Map tiles remain unchanged.
+- Import status is exposed through an optional `onImportStatus` callback. Buffer transfer is opt-in (`transferOwnership`), preserving reusable component caller ownership by default. StrictMode effect replay does not retransmit detached buffers.
+- Worker termination on viewer release frees dataset/index state; generation-tagged status ignores superseded imports.
+- JSONL parser/decompression failures now reject through the shared importer rather than merely logging an error. This directly necessary fix is covered by actual parser tests.
+- Dataset replacement exposed a separate Treenome worker relying on garbage collection; it now terminates explicitly on unmount and recreates safely on effect replay.
+- Browser format coverage exposed the existing Nexus parser requiring a root label/length. Accept unlabeled roots and report a missing tree explicitly. Surface existing Newick parser error flags and empty-tree errors instead of accepting malformed input or exposing internal property-access errors.
+- Final types, component tests, both builds and browser checks pass. Existing bundler warnings remain; no unresolved APP-01 blockers.
 
 ## 2026-10-22 — COMP-02 approved extension
 
@@ -617,6 +625,31 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 ---
 
 # Session Log
+
+## 2026-10-23 — APP-01 complete
+
+**Scope and result:** Updated Current Task before implementation. Replaced website hosted dataset selection, legacy redirects, URL/proxy and text imports with accessible multi-file staging and explicit Open dataset. Preserved supported formats, type correction, ladderization, metadata/DOT attachments, visualization URL preferences and reusable HTTP/URL component interfaces. Legacy source URLs are removed from website query state before the viewer receives it. Kept the header/logo/links for APP-02.
+
+**Import lifecycle:** File references are staged without reading. Open reads files sequentially, reports progress and transfers their buffers without duplicating the input payload. Transfer is opt-in for reusable component callers. The optional typed `onImportStatus` callback reports processing/ready/error; numeric progress is normalized. Errors retain files for retry or editing. Generation checks isolate obsolete statuses, worker errors are surfaced inline and release clears callbacks, parsed datasets and indexes. Both backend and Treenome workers are closed on viewer replacement; StrictMode replay is covered. Local paths, persistence, temporary-file APIs and Electron are not added.
+
+**Directly necessary correctness fixes:** JSONL stream/parser errors now reject instead of merely logging or hanging. Nexus accepts trees without root labels/branch lengths; empty or malformed Newick uses existing parser error flags to produce a useful error. These changes have focused parser tests. Nonfatal DOT diagnostics are preserved.
+
+**Validation:**
+- `npm run check-types`: passed, zero TypeScript errors.
+- `npm test -- --run`: 86 tests across 24 files passed; two existing opt-in performance suites skipped. Coverage includes parser failures/gzip, corrected file types, stale uploads, callback cleanup, transfer ownership, StrictMode replay, Treenome lifetime and the existing HTTP config/nodes protocol through mocked transport.
+- Component `NODE_OPTIONS=--max-old-space-size=16384 npm run build`: passed. Website `npm run build`: passed against the final bundle. Existing dependency, mixed-export, eval and large-bundle warnings remain.
+- Nine APP-01 Playwright tests passed in Chrome: legacy URLs without remote dataset requests, keyboard picker access, batch drop, explicit JSONL/DOT launch, invalid-batch correction, Newick/Nexus/Nextstrain and gzip inputs, replacement, read/parser errors, retry/cancellation and narrow layout. The existing JSONL e2e test now explicitly clicks Open; its historical fixture is absent, so that older recorded test was not run. The shared import package's legacy test command invokes yarn; actual importer tests run through component Vitest instead.
+- Final pf fixture browser checks passed: shared metadata colours, selection filtering, table/Map/Embedding state, actual GPU/hover picking, tab switches, both tree orientations, controls visibility and desktop/narrow/short layouts. URL defaults and re-upload behavior passed. No page errors.
+- Final large-fixture Chrome: 2,399,238 tips imported in 26.59 seconds. One/three/six metadata columns, categorical/numeric tooltips, navigation and repeated orientation switches passed. Both input buffers were detached after transfer. Both old workers were confirmed closed (309 ms additional wait after the Open another dataset action); the 1,508-tip replacement loaded successfully.
+- Main-thread heap observations: 448.9 MB before release and 35.4 MB after release and explicit garbage collection. CDP backing storage was 170.8 MB before and 157.3 MB after. These exclude worker heap, are not total browser memory and are single-run observations, not a controlled performance comparison.
+- `git diff --check`: passed. Existing untracked input fixtures were preserved.
+
+**Validation findings:** Initial test type errors were corrected with stream declarations and appropriate fixture typing. The website build required permission to write sibling-package Vite caches. Website Playwright 1.39's old macOS Chrome graphics arguments failed with installed Chrome; the temporary runner omits `--use-angle` and enables SwiftShader, matching the newer installed component runner. A remote-request test initially counted the local navigation URL containing a remote parameter; it now checks destination hostname. The Nexus format test exposed the parser restriction fixed above. Dataset-release validation exposed Treenome relying on garbage collection and led to explicit cleanup. Final checks pass without disabling checks or weakening assertions.
+
+**Evidence:** `taxonium_website/e2e/app01.spec.js`; temporary runner `/private/tmp/app01-playwright.config.mjs`; browser logs `/private/tmp/app01-browser-tests.log`, `/private/tmp/app01-spatial.log`, `/private/tmp/app01-large.log`; final metrics `/private/tmp/app01-large.json`; screenshots `/private/tmp/app01-landing.png`, `/private/tmp/app01-spatial-*.png`, `/private/tmp/app01-large.png`; component/website build logs and component test log under `/private/tmp/app01-*`.
+
+**Remaining issues and next task:** No APP-01 blockers. The broader historical million-tip metadata-index benchmark remains a separate user handoff; this task validated real import/render/replacement behavior. Await prioritisation of APP-02; do not automatically start it.
+
 
 ## 2026-10-22 — COMP-02 unified bottom-panel extension complete
 

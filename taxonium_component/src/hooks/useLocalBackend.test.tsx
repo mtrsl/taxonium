@@ -1,10 +1,10 @@
-import { act, useEffect } from "react";
+import { act, useEffect, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import type { LocalBackend, NodeDetails, MetadataDensityRequest } from "../types/backend";
 import { useMetadataTable } from "./useMetadataTable";
 
-const worker = vi.hoisted(() => ({ postMessage: vi.fn(), onmessage: null as null | ((event: { data: unknown }) => void) }));
+const worker = vi.hoisted(() => ({ postMessage: vi.fn(), terminate: vi.fn(), onmessage: null as null | ((event: { data: unknown }) => void) }));
 vi.mock("../webworkers/localBackendWorker.js?worker&inline", () => ({ default: class { constructor() { return worker; } } }));
 import useLocalBackend from "./useLocalBackend";
 
@@ -69,4 +69,36 @@ describe("local request routing", () => {
       expect(backend!.type).toBe("local");
     } finally { await act(async () => root.unmount()); }
   });
+  it("transfers opted-in buffers once across StrictMode replay, routes current status and releases the worker", async () => {
+    worker.postMessage.mockClear(); worker.terminate.mockClear();
+    const root = createRoot(document.createElement("div"));
+    const status = vi.fn();
+    const buffer = new ArrayBuffer(32);
+    const upload = { filename: "tree.nwk", data: buffer, metadata: { data: buffer }, transferOwnership: true };
+    let backend: LocalBackend;
+    function Harness({ upload }: { upload: Record<string, unknown> }) { backend = useLocalBackend(upload, status); return null; }
+    await act(async () => root.render(<StrictMode><Harness upload={upload} /></StrictMode>));
+    expect(worker.postMessage).toHaveBeenCalledTimes(1);
+    const [message, transfer] = worker.postMessage.mock.calls[0];
+    expect(transfer).toEqual([buffer]);
+    expect(worker.terminate).not.toHaveBeenCalled();
+    await act(async () => worker.onmessage!({ data: { type: "status", importId: message.importId - 1, data: { error: "Old failure" } } }));
+    expect(status).not.toHaveBeenCalled();
+    await act(async () => worker.onmessage!({ data: { type: "status", importId: message.importId, data: { percentage: "42.50", message: "Reading nodes" } } }));
+    expect(status).toHaveBeenLastCalledWith({ phase: "processing", message: "Reading nodes", percentage: 42.5 });
+    await act(async () => worker.onmessage!({ data: { type: "status", importId: message.importId, data: { phase: "ready", message: "Dataset ready" } } }));
+    expect(status).toHaveBeenLastCalledWith({ phase: "ready", message: "Dataset ready", percentage: undefined });
+    await act(async () => root.render(<StrictMode><Harness upload={{ filename: "retry.nwk", data: new ArrayBuffer(4) }} /></StrictMode>));
+    expect(worker.postMessage.mock.calls.at(-1)![1]).toEqual([]);
+    const retry = worker.postMessage.mock.calls.at(-1)![0];
+    await act(async () => worker.onmessage!({ data: { type: "status", importId: retry.importId, data: { error: "Invalid tree" } } }));
+    expect(status).toHaveBeenLastCalledWith({ phase: "error", message: "Invalid tree", percentage: undefined });
+    const listCallback = vi.fn();
+    backend!.getTipAtts(0, "name", listCallback);
+    await act(async () => root.unmount());
+    worker.onmessage!({ data: { type: "list", data: ["old sample"] } });
+    expect(listCallback).not.toHaveBeenCalled();
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+
 });
