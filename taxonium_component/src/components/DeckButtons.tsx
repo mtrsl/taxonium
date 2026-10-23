@@ -5,7 +5,6 @@ import {
   BiMoveVertical,
   BiMoveHorizontal,
 } from "react-icons/bi";
-import { CgListTree } from "react-icons/cg";
 
 import { TiZoom, TiCog } from "react-icons/ti";
 
@@ -74,25 +73,6 @@ export const DeckButtons = ({
             <ClipLoader size={24} color="#444444" />
           </div>
         )}
-        <div
-          className="text-gray-800  mr-4 mt-auto mb-1 bg-white
-      opacity-50 px-1 hover:opacity-100 rounded hidden sm:inline-block
-      "
-          style={{
-            fontSize: ".7em",
-            pointerEvents: "auto",
-            boxShadow: "0px -3px 4px  4px rgba(255, 255, 255, 1)",
-          }}
-        >
-          <a
-            href="https://taxonium.org"
-            target="_blank"
-            className="no-underline hover:underline"
-          >
-            <CgListTree className="inline-block mr-1 w-3 h-3 inline-block" />
-            Taxonium
-          </a>
-        </div>
         <label style={{ pointerEvents: "auto", background: "white", alignSelf: "center", fontSize: "12px", padding: "4px", marginLeft: "auto" }}>
           Layout{" "}
           <select style={{ width: 112, padding: "2px 24px 2px 6px" }} aria-label="Tree layout" value={settings.treenomeEnabled ? "standard" : settings.treeLayout ?? "standard"}

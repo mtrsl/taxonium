@@ -9,30 +9,27 @@ Do not automatically begin Next Task or other backlog items.
 # Current Status
 
 **Phase:** Final application improvements
-**Status:** APP-01 complete. COMP-02, COMP-01, VIS-01 and META-01–04 remain complete.
+**Status:** APP-02 complete. APP-01, COMP-02, COMP-01, VIS-01 and META-01–04 are also complete.
 
-The website now opens local datasets through a drop zone/file picker and explicit review/Open workflow. Hosted catalogs, redirects, URL/proxy imports and pasted text are removed. Files remain unread until Open, buffers transfer to the existing worker, and progress/errors support retry or return to files. Open another dataset releases the previous viewer and its workers. The component HTTP/URL APIs and shared visualization state remain available.
-
-Type checking, 86 component tests, nine APP-01 browser tests and both builds pass. Real-fixture linked-view checks and the 2,399,238-tip compressed import/replacement check pass. Existing bundler warnings remain; no APP-01 blockers. APP-02 and Electron packaging are unstarted.
+APP-02 removes the website header and branding while retaining the local loading screen and viewer controls. “Open another dataset” uses the existing reset path beneath the sequence count. Type checking, 86 component tests, both builds and all 12 targeted browser checks pass.
 
 # Current Task
 
-## APP-01 — Local-only dataset loading
+## APP-02 — Simplify application layout
 
-Implement the approved local-file landing page, explicit review/Open workflow, remote-entry cleanup, memory-conscious import lifecycle and browser validation.
+Remove the website navigation header and move “Open another dataset” beneath the sequence count in the existing right-side panel. Preserve local loading and visualization controls.
 
 ### Checklist
 
-- [x] Replace website remote dataset selection/imports with accessible file staging and explicit Open dataset.
-- [x] Preserve formats, metadata/DOT attachments and visualization query settings; remove obsolete hosted-dataset configuration.
-- [x] Add sequential file reading, transfer ownership, import status/error recovery and dataset cleanup.
-- [x] Test import lifecycle, compatibility, format variants and real browser interactions including large compressed input.
-- [x] Run component types/tests/build, website build and relevant browser tests; record outcomes.
+- [x] Remove the top header, application logo, info button and branded GitHub links.
+- [x] Place the dataset reset action beneath the right-side sequence count and wire it to existing local-file reset behavior.
+- [x] Verify the loading page, viewer settings, viewport resizing and standard/rotated layouts across desktop and narrow/short screens.
+- [x] Run component type checks, relevant tests, component/website builds and targeted browser checks.
 - [x] Update Design Notes, Current Status, Session Log and handoff.
 
 # Next Task
 
-Await user prioritisation after APP-01; APP-02 is not automatically authorised.
+Await user prioritisation after APP-02. APP-03 Electron work is not automatically authorised.
 
 ---
 
@@ -356,8 +353,8 @@ Requirements:
 - Remove the application logo.
 - Remove the tree selector.
 - Remove the GitHub links from the application interface.
-- Keep the 'Open another dataset' button, move it to the options tab on
-  the right.
+- Keep the local dataset landing and place “Open another dataset” immediately
+  beneath the sequence count in the existing right-side panel; do not add a tab.
 - Allow the main visualisation area to use the additional vertical space.
 - Ensure the layout resizes correctly when the browser window changes size.
 - Preserve access to essential controls, including local dataset loading and visualisation settings.
@@ -451,6 +448,20 @@ The project is complete when:
 ---
 
 # Design Notes
+
+## APP-02 — Approved implementation (2026-10-23)
+
+- Remove the complete website header, including brand/logo, info button and source-code link. Remove the Taxonium logo/watermark from the viewer controls and remove the hardcoded Taxonium GitHub link from the About overlay while keeping its documentation and citation content.
+- Keep the APP-01 local-file landing and its Open dataset action. Keep loaded dataset title in the document title.
+- Put “Open another dataset” immediately beneath the “Displaying … sequences” paragraph in the existing right SearchPanel. Do not add a tab.
+- Add optional `onOpenAnotherDataset` callback props to Taxonium/SearchPanel and pass the existing website `returnToFiles(true)` action. Component consumers that omit the callback see no new control.
+- Keep existing viewer settings and layout state. The existing Deck ResizeObserver should absorb the removed header height; avoid new layout abstractions unless browser evidence requires them.
+- `npm run check-types`: passed.
+- `npm test -- --run`: 86 tests passed; two opt-in benchmark tests skipped.
+- `npm run build`: component and website builds passed. Existing export and large-chunk warnings remain.
+- Playwright: 12 browser tests passed, including all 9 APP-01 regressions and 3 APP-02 tests. The APP-02 coverage checks the local loading page/header removal, sequence-count reset placement/settings, and standard/rotated layouts at desktop, narrow and short viewports.
+- `git diff --check`: passed. No APP-02 blockers or unresolved issues.
+
 
 ## APP-01 — Implemented decisions (2026-10-23)
 
@@ -625,6 +636,21 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 ---
 
 # Session Log
+
+## 2026-10-23 — APP-02 complete
+
+**Scope and result:** Removed the Taxonium website header (brand, About button and source link), the viewer watermark, and the hardcoded GitHub link in About while retaining its documentation and citation links. The APP-01 local-file landing remains. Added “Open another dataset” immediately below the viewer's sequence count and connected it to the existing `returnToFiles(true)` reset path. The callback is optional in the reusable component API, so standalone component users do not see the website-specific action. Kept the document title, viewer settings and both tree layout choices.
+
+**Validation:**
+- `npm run check-types`: passed with zero TypeScript errors.
+- `npm test -- --run`: 86 tests passed across 24 files; two opt-in benchmark tests skipped.
+- Component `npm run build`: passed. Website `npm run build`: passed against the final component bundle. Existing export and large-chunk warnings remain.
+- Playwright: 12 tests passed (9 APP-01 regression tests and 3 APP-02 tests). The APP-02 checks cover the local landing, header and logo removal, reset action placement and behavior, viewer settings, and canvas sizing in standard/rotated layouts at desktop, narrow and short viewports.
+- `git diff --check`: passed.
+
+**Blockers/unresolved:** None.
+
+**Next:** Await user prioritisation. APP-03 Electron packaging is not automatically authorised.
 
 ## 2026-10-23 — APP-01 complete
 

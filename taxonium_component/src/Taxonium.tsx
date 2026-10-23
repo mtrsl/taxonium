@@ -48,6 +48,7 @@ interface SourceData {
 interface TaxoniumProps {
   sourceData?: SourceData;
   onImportStatus?: (status: ImportStatus) => void;
+  onOpenAnotherDataset?: () => void;
   backendUrl?: string;
   configDict?: Record<string, unknown>;
   configUrl?: string;
@@ -72,6 +73,7 @@ const default_query = getDefaultQuery();
 function Taxonium({
   sourceData,
   onImportStatus,
+  onOpenAnotherDataset,
 
   backendUrl,
 
@@ -389,6 +391,7 @@ function Taxonium({
                 perNodeFunctions={perNodeFunctions}
                 toggleSidebar={toggleSidebar}
                 placeSequencesUrl={showPlaceSequencesButton ? buildPlaceSequencesUrl() : undefined}
+                onOpenAnotherDataset={onOpenAnotherDataset}
               />
             )}
           </div>

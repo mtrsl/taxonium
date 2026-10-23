@@ -40,19 +40,11 @@ function AboutOverlay({ enabled, setEnabled, overlayContent }) {
         <div className="m-5">
           <h2 className="font-bold mb-3">Welcome to Taxonium</h2>
           <p className="mb-1">
-            Taxonium is a web application for exploring phylogenetic trees. Find
-            out more at our{" "}
-            <a
-              className="text-blue underline"
-              href="https://github.com/theosanderson/taxodium"
-            >
-              Github repository
-            </a>{" "}
-            or{" "}
+            Taxonium is a web application for exploring phylogenetic trees. Read
+            the{" "}
             <a className="text-blue underline" href="https://docs.taxonium.org">
-              read the documentation
-            </a>
-            .
+              documentation
+            </a>.
           </p>
           <p className="mb-1  mt-6 text-gray-700">
             <h3 className="font-bold">Citation</h3>

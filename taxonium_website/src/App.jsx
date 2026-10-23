@@ -2,9 +2,6 @@ import { useState, useEffect, Suspense } from "react";
 import { Tooltip as ReactTooltip } from "react-tooltip";
 import AboutOverlay from "./components/AboutOverlay";
 import TaxoniumBit from "./components/TaxoniumBit";
-import { CgListTree } from "react-icons/cg";
-import { BsInfoSquare } from "react-icons/bs";
-import { FaGithub } from "react-icons/fa";
 import useQueryAsState from "./hooks/useQueryAsState";
 import { useInputHelper } from "./hooks/useInputHelper";
 import InputSupplier from "./components/InputSupplier";
@@ -38,14 +35,6 @@ export default function App() {
       event.preventDefault(); setBeingDragged(false);
       if (!uploadedData && !busy) inputHelper.addFiles(event.dataTransfer.files);
     }}>
-      <header className="from-gray-500 to-gray-600 bg-gradient-to-bl shadow-md flex justify-between items-center px-3 gap-2 flex-shrink-0 h-16 text-white">
-        <a href="/" className="flex items-center min-w-0" title={title || "Taxonium"}><CgListTree className="h-6 w-6 mr-2 shrink-0" /><span className="font-bold truncate">{title || "Taxonium"}</span></a>
-        <div className="flex items-center gap-3 shrink-0">
-          {uploadedData && <button className="text-sm underline" onClick={() => returnToFiles(true)}>Open another dataset</button>}
-          <button onClick={() => setAboutEnabled(true)} title="Info" aria-label="Info"><BsInfoSquare className="w-5 h-5" /></button>
-          <a href="https://github.com/theosanderson/taxonium" title="Source code" aria-label="Source code"><FaGithub className="w-5 h-5" /></a>
-        </div>
-      </header>
       {beingDragged && <div role="status" className="bg-sky-200 p-3 text-center">Drop files to add to this dataset</div>}
       {(busy || status.phase === "error") && <div className="p-3 bg-gray-50 border-b" role={status.phase === "error" ? "alert" : "status"} aria-live="polite">
         <p>{status.message}</p>
@@ -56,7 +45,7 @@ export default function App() {
         </div>
       </div>}
       {uploadedData ? <div className="flex-1 min-h-0"><Suspense fallback={<p className="p-5" role="status">Loading viewer…</p>}>
-        <TaxoniumBit sourceData={uploadedData} onImportStatus={inputHelper.onImportStatus} query={query} updateQuery={updateQuery} setOverlayContent={setOverlayContent} onSetTitle={setTitle} overlayContent={overlayContent} setAboutEnabled={setAboutEnabled} />
+        <TaxoniumBit sourceData={uploadedData} onImportStatus={inputHelper.onImportStatus} onOpenAnotherDataset={() => returnToFiles(true)} query={query} updateQuery={updateQuery} setOverlayContent={setOverlayContent} onSetTitle={setTitle} overlayContent={overlayContent} setAboutEnabled={setAboutEnabled} />
       </Suspense></div> : <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-8"><InputSupplier inputHelper={inputHelper} /></main>}
     </div>
   </>;

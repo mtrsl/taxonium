@@ -73,6 +73,7 @@ interface SearchPanelProps {
   perNodeFunctions: any;
   toggleSidebar: () => void;
   placeSequencesUrl?: string;
+  onOpenAnotherDataset?: () => void;
 }
 
 function SearchPanel({
@@ -94,6 +95,7 @@ function SearchPanel({
   perNodeFunctions,
   toggleSidebar,
   placeSequencesUrl,
+  onOpenAnotherDataset,
 }: SearchPanelProps) {
   const cfg = config as Record<string, any>;
   const selectedNodeDetails =
@@ -329,6 +331,15 @@ function SearchPanel({
                 </>
               )}
             </p>
+            {onOpenAnotherDataset && (
+              <button
+                type="button"
+                className="text-blue-700 text-sm underline mt-1"
+                onClick={onOpenAnotherDataset}
+              >
+                Open another dataset
+              </button>
+            )}
             {cfg.enabled_by_gisaid && (
               <span className="text-gray-500 mt-1">
                 Enabled by data from{" "}
