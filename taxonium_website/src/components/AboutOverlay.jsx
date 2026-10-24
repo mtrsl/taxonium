@@ -35,6 +35,12 @@ function AboutOverlay({ enabled, setEnabled, overlayContent }) {
       >
         X
       </button>
+      {import.meta.env.MODE === "desktop" && (
+        <section className="m-5 mb-6">
+          <h2 className="font-bold mb-3">BigTree authors</h2>
+          <p>Theo Sanderson, Matt Russell, and John Lees.</p>
+        </section>
+      )}
       <div dangerouslySetInnerHTML={{ __html: overlayContent }} />
       {!overlayContent && (
         <div className="m-5">

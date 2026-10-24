@@ -1,0 +1,101 @@
+{
+  "name": "bigtree-desktop",
+  "version": "1.0.0",
+  "description": "BigTree desktop application",
+  "author": "Theo Sanderson <theo@theo.io>",
+  "contributors": [
+    {
+      "name": "Matt Russell",
+      "email": "marussel@ebi.ac.uk"
+    },
+    {
+      "name": "John Lees",
+      "email": "jlees@ebi.ac.uk"
+    }
+  ],
+  "license": "GPL-3.0-only",
+  "main": "main.js",
+  "scripts": {
+    "dev": "concurrently --kill-others \"npm run dev:web\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "dev:web": "npm --prefix ../taxonium_website run dev -- --mode desktop --host 127.0.0.1 --port 5173 --strictPort",
+    "check-types": "npm --prefix ../taxonium_component run check-types && node --check main.js && node --check rendererServer.cjs",
+    "build:component": "cross-env NODE_OPTIONS=--max-old-space-size=16384 npm --prefix ../taxonium_component run build",
+    "build:renderer": "cross-env NODE_OPTIONS=--max-old-space-size=16384 npm --prefix ../taxonium_website run build:desktop",
+    "build": "npm run build:component && npm run build:renderer && electron-builder --dir",
+    "package": "npm run build",
+    "dist": "npm run build:component && npm run build:renderer && electron-builder",
+    "package:mac:arm64": "npm run build:component && npm run build:renderer && electron-builder --mac dmg zip --arm64",
+    "package:mac:x64": "npm run build:component && npm run build:renderer && electron-builder --mac dmg zip --x64",
+    "package:win": "npm run build:component && npm run build:renderer && electron-builder --win nsis --x64",
+    "package:linux": "npm run build:component && npm run build:renderer && electron-builder --linux AppImage --x64",
+    "test:server": "node --test test/rendererServer.test.cjs",
+    "test:e2e": "playwright test",
+    "smoke:packaged": "node scripts/smoke-packaged.cjs",
+    "test": "npm run test:server && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "concurrently": "^9.1.0",
+    "cross-env": "^10.1.0",
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "org.bigtree.desktop",
+    "productName": "BigTree",
+    "copyright": "Copyright © 2026 Theo Sanderson, Matt Russell, and John Lees",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "rendererServer.cjs",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "mac": {
+      "icon": "../electron-icon-pack/assets/macos/icon.icns",
+      "extraResources": [
+        {
+          "from": "../electron-icon-pack/assets/png/icon.png",
+          "to": "icons/dock.png"
+        }
+      ],
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.education",
+      "identity": null
+    },
+    "win": {
+      "icon": "../electron-icon-pack/assets/windows/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "icon": "../electron-icon-pack/assets/linux/icon.png",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Education"
+    },
+    "dmg": {
+      "icon": "../electron-icon-pack/assets/macos/icon.icns"
+    },
+    "extraResources": [
+      {
+        "from": "../electron-icon-pack/assets/linux/icon.png",
+        "to": "icons/bigtree.png"
+      }
+    ]
+  }
+}

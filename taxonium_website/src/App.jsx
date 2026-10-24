@@ -16,7 +16,7 @@ export default function App() {
   const inputHelper = useInputHelper({ setUploadedData });
   const { status } = inputHelper;
   const busy = status.phase === "reading" || status.phase === "processing";
-  useEffect(() => { document.title = title || "Taxonium"; }, [title]);
+  useEffect(() => { document.title = title || (import.meta.env.MODE === "desktop" ? "BigTree" : "Taxonium"); }, [title]);
   const returnToFiles = clear => {
     inputHelper.returnToFiles(clear);
     setTitle(null);

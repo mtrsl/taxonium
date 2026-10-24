@@ -9,27 +9,36 @@ Do not automatically begin Next Task or other backlog items.
 # Current Status
 
 **Phase:** Final application improvements
-**Status:** APP-02 complete. APP-01, COMP-02, COMP-01, VIS-01 and META-01–04 are also complete.
+**Status:** APP-03 complete, including platform icons, package/UI authorship and native About-dialog follow-ups. APP-02, APP-01, COMP-02, COMP-01, VIS-01 and META-01–04 are also complete.
 
-APP-02 removes the website header and branding while retaining the local loading screen and viewer controls. “Open another dataset” uses the existing reset path beneath the sequence count. Type checking, 86 component tests, both builds and all 12 targeted browser checks pass.
+APP-03 packages the existing local-file website as BigTree in Electron. It keeps browser-worker processing and serves the production renderer from a managed loopback server. The unsigned macOS arm64 DMG and ZIP were generated and verified; the packaged app opens and loads a tree with metadata. Native CI builds cover macOS arm64/x64, Windows x64 and Linux x64.
 
 # Current Task
 
-## APP-02 — Simplify application layout
+## APP-03 — BigTree Electron desktop application
 
-Remove the website navigation header and move “Open another dataset” beneath the sequence count in the existing right-side panel. Preserve local loading and visualization controls.
+Package the current local-file website as a secure Electron application named BigTree. Keep worker-based file processing and provide unsigned macOS, Windows and Linux packages.
 
 ### Checklist
 
-- [x] Remove the top header, application logo, info button and branded GitHub links.
-- [x] Place the dataset reset action beneath the right-side sequence count and wire it to existing local-file reset behavior.
-- [x] Verify the loading page, viewer settings, viewport resizing and standard/rotated layouts across desktop and narrow/short screens.
-- [x] Run component type checks, relevant tests, component/website builds and targeted browser checks.
-- [x] Update Design Notes, Current Status, Session Log and handoff.
+- [x] Use the OS-specific icons from `electron-icon-pack/` in macOS, Windows and Linux packages and the Linux application window.
+- [x] Rebuild and verify the packaged macOS app and update the APP-03 handoff.
+- [x] Record Theo Sanderson as package author and Matt Russell and John Lees as package contributors; keep email addresses in package metadata only.
+- [x] Validate the metadata and update the APP-03 handoff.
+- [x] Show all three BigTree authors in the desktop About overlay without email addresses; keep the Taxonium paper citation unchanged.
+- [x] Validate the desktop renderer and update the APP-03 handoff.
+- [x] Set the macOS native About-dialog copyright metadata to display all three authors.
+- [x] Rebuild and verify the macOS application and distributables, then update the APP-03 handoff.
+- [x] Rename the Electron package to `taxonium_electron_standalone`, brand it BigTree, and use the current website and component.
+- [x] Serve the production renderer from a loopback server owned by the Electron main process; preserve worker processing and secure Electron defaults.
+- [x] Add development, type-check, test, production build and platform packaging scripts; remove the obsolete backend launcher and binary downloads.
+- [x] Add native CI builds for macOS arm64/x64, Windows x64 and Linux x64, plus developer and platform documentation.
+- [x] Validate the production and packaged macOS application, core dataset workflow and CI packaging configuration.
+- [x] Record Design Notes, validation, Current Status, Session Log and handoff.
 
 # Next Task
 
-Await user prioritisation after APP-02. APP-03 Electron work is not automatically authorised.
+Await user prioritisation. Do not automatically start another backlog item.
 
 ---
 
@@ -369,16 +378,18 @@ Design considerations:
 
 ### APP-03 — Electron desktop application
 
-Create an Electron-based desktop version of the application that supports local dataset loading and retains the functionality of the browser-based application.
+**Status:** Complete (2026-10-24); see Design Notes and Session Log.
+
+Package the current local-file website as a BigTree desktop application while retaining the browser application's dataset and visualisation functionality.
 
 Requirements:
 
 - Add an Electron application entry point and appropriate configuration.
 - Package the existing application rather than duplicating its UI or visualisation code.
 - Support drag-and-drop loading of local datasets.
-- Preserve the local server functionality required for preprocessing and prerendering.
-- Ensure the local server starts and stops appropriately with the Electron application.
-- Avoid requiring the user to manually start a development server.
+- Preserve the website's browser-worker processing and prerendering. Use a local loopback server only to serve the packaged renderer assets.
+- Ensure the asset server starts and stops with Electron and binds only to the loopback interface.
+- Start required development servers through the Electron development command; packaged users do not start a server manually.
 - Ensure that file loading, metadata, and visualisation features work in the packaged application.
 - Provide clear error reporting if the local server fails to start.
 - Add scripts for building and packaging the Electron application.
@@ -389,12 +400,12 @@ Requirements:
 Design considerations:
 
 - Reuse the existing website and component packages.
-- Investigate whether the local server should run as a child process or through another suitable mechanism.
-- Ensure that application resources and local server assets are correctly located in packaged builds.
+- Serve only bundled renderer files, resolve them correctly from packaged resources, and handle client-side routes.
+- Keep local file access and dataset processing in the existing renderer workflow; do not expose filesystem or process APIs to it.
 - Use secure Electron defaults, including context isolation and disabling unnecessary Node.js integration in renderer processes.
 - Avoid exposing unrestricted filesystem or process access to the renderer.
 - Ensure the application can close cleanly without leaving background server processes.
-- Consider cross-platform packaging for Linux, macOS, and Windows, without requiring all platforms to be supported in the initial implementation.
+- Package unsigned macOS arm64/x64, Windows x64 and Linux x64 builds through native GitHub Actions runners.
 - Keep the browser-based application functional unless explicitly instructed otherwise.
 
 #### Documentation
@@ -448,6 +459,29 @@ The project is complete when:
 ---
 
 # Design Notes
+
+## APP-03 — Approved implementation (2026-10-24)
+
+- Product name is **BigTree**. The package directory is `taxonium_electron_standalone/`, npm package is `bigtree-desktop`, and Electron application ID is `org.bigtree.desktop`.
+- The desktop Vite mode builds the website source and existing component into the Electron renderer. It removes analytics and remote Google font links and sets the desktop document title to BigTree. The regular website build retains its existing analytics, font links and Taxonium title; Roboto used by the component is bundled locally.
+- Electron's main process serves only the packaged renderer over a random `127.0.0.1` port. The server handles client-side routes, GET/HEAD requests, MIME types and traversal checks, applies a restrictive content security policy, and shuts down when the last window closes.
+- Dataset loading stays in the existing website file picker/drop flow and browser workers. No backend child process, downloaded Node binaries, preload bridge, or renderer filesystem/process access is used. Electron enables sandboxing, context isolation and web security; external HTTP(S) links open in the system browser.
+- Electron 45.0.0 and electron-builder 26.18.0 are pinned. Package scripts cover development, type checking, tests, renderer/component builds, unpacked output and macOS/Windows/Linux distributables. The package lock audits with zero vulnerabilities after compatible transitive updates.
+- GitHub Actions uses native runners for macOS arm64/x64, Windows x64 and Linux x64. It runs checks and Electron smoke tests, builds distributables and uploads unsigned artifacts. Signing, notarisation, automatic updates and file associations remain out of scope.
+- Developer and platform instructions are in `taxonium_electron_standalone/README.md`. App icons use the platform-specific source files in `electron-icon-pack/`: ICNS for the macOS app and DMG, the pack's PNG for the runtime Dock icon, ICO for Windows, and the 512px PNG for Linux packaging and its window icon.
+- npm package metadata retains Theo Sanderson as author and records Matt Russell and John Lees as contributors. Contact email addresses are kept in package metadata only.
+- The desktop About overlay displays all three BigTree authors separately from the unchanged Taxonium paper citation. The names are visible in desktop mode only; the website presentation remains unchanged.
+- The macOS native About dialog uses electron-builder's copyright metadata to display all three BigTree authors. No email addresses are included in the native copyright string.
+- `npm run check-types`: passed; Electron main/server syntax checks passed.
+- `npm run test:server`: passed (1 test covering loopback serving, headers/CSP, assets, SPA fallback, missing assets, traversal, HEAD and unsupported methods).
+- `npm run test:e2e`: passed (2 Electron checks for renderer isolation and local tree-plus-metadata loading).
+- Electron `npm run build`: component, desktop renderer and unpacked macOS arm64 application passed. Regular website `NODE_OPTIONS=--max-old-space-size=16384 npm run build` passed. Existing eval, missing `spawn` export and large-chunk warnings remain.
+- Packaged-app smoke test passed from `dist/mac-arm64/BigTree.app`; it opened the local landing and loaded the three-tip tree plus metadata. The generated DMG checksum and ZIP contents both verified.
+- The packaged macOS app and Dock PNG checksums match `electron-icon-pack/`; the ICNS is the bundle icon, and the PNG is the supported runtime Dock image. The rebuilt packaged-app smoke test passed after this correction.
+- Desktop build output contains no analytics or remote Google font links. Desktop navigation and file loading were exercised under the packaged content security policy.
+- `npm audit fix`: updated compatible lockfile dependencies; zero vulnerabilities remain. Workflow YAML parsed and `git diff --check` passed.
+- Windows, Linux and macOS x64 artifacts were configured for native CI but were not built on this Apple Silicon host. CI results remain to be observed after the workflow runs.
+
 
 ## APP-02 — Approved implementation (2026-10-23)
 
@@ -636,6 +670,37 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 ---
 
 # Session Log
+
+## 2026-10-24 — APP-03 complete
+
+**Scope and result:** Renamed the prototype package to `taxonium_electron_standalone/` and branded the app BigTree. Reused `taxonium_website/` and `taxonium_component/` for the renderer, retained existing browser-worker preprocessing and file loading, and removed the duplicate prototype UI, preload bridge, backend spawn code and downloaded Node binaries. Electron now serves the production renderer through a managed loopback-only server with secure window settings, CSP, navigation restrictions, startup retry/quit reporting and clean server lifecycle. Added npm development/build/package/type/test commands, local developer/platform documentation and a native four-target GitHub Actions matrix. The ordinary website build and loading workflow remain available.
+
+**Validation:**
+- Component type check and Electron JavaScript syntax checks passed.
+- Server tests passed (1); Electron Playwright checks passed (2), including loading a local Newick tree and CSV metadata.
+- Component + desktop renderer + unpacked macOS arm64 build passed. The regular website production build passed.
+- Packaged BigTree smoke test passed with the local fixture. Unsigned `BigTree-1.0.0-arm64.dmg` and `BigTree-1.0.0-arm64-mac.zip` were generated; `hdiutil verify` and `unzip -t` passed.
+- `npm audit fix` applied compatible updates; the final audit reported zero vulnerabilities. GitHub Actions YAML parsing and `git diff --check` passed.
+
+**Icon-pack follow-up (2026-10-24):** Read `electron-icon-pack/README.md` and configured the macOS app/DMG to use its ICNS, Windows packaging to use its ICO, and Linux packaging/window to use its 512px PNG. The macOS Dock uses the pack's PNG variant as an extra resource because Electron's runtime native-image loader does not accept ICNS. Removed the stale Dock icon path that prevented packaged startup. The packaged smoke script now checks the macOS ICNS and Dock PNG resources as well as the Linux window icon.
+
+**Icon validation:** `npm run check-types`, JavaScript syntax checks and `git diff --check` passed. The rebuilt packaged smoke launch passed and loaded the three-tip tree with metadata. The packaged ICNS and Dock PNG checksums match their source assets; `hdiutil verify` and `unzip -t` both passed for the rebuilt DMG and ZIP.
+
+**Author metadata follow-up (2026-10-24):** Kept Theo Sanderson as the npm package author and added Matt Russell and John Lees as package contributors. Email addresses remain in `taxonium_electron_standalone/package.json` only.
+
+**Author metadata validation:** `npm pkg get author contributors`, `npm run check-types` and `git diff --check` passed. Confirmed the supplied email addresses do not appear outside the package metadata.
+
+**Visible-author follow-up (2026-10-24):** Added a desktop-only “BigTree authors” section for Theo Sanderson, Matt Russell and John Lees. Kept the Taxonium paper citation unchanged and displayed no email addresses in the UI.
+
+**Visible-author validation:** `npm run check-types`, desktop renderer build, and `npm run build` passed. Inspected the packaged `app.asar`: it contains the three displayed names and existing paper citation, with no author emails in renderer assets. Refreshed the unsigned macOS arm64 DMG and ZIP; `hdiutil verify` and `unzip -tq` passed.
+
+**Native About-dialog follow-up (2026-10-24):** Set electron-builder's `copyright` metadata to include Theo Sanderson, Matt Russell and John Lees, which populates the native macOS About dialog's copyright field.
+
+**Native About-dialog validation:** The rebuilt app's `NSHumanReadableCopyright` is `Copyright © 2026 Theo Sanderson, Matt Russell, and John Lees`. Refreshed the unsigned macOS arm64 DMG and ZIP; `hdiutil verify` and `unzip -tq` passed. `npm run check-types` and `git diff --check` passed.
+
+**Known limitations:** Only macOS arm64 was packaged and interactively tested locally. macOS x64, Windows x64 and Linux x64 are configured for native CI; those jobs have not yet run. Unsigned builds may show the documented OS first-launch warning. Existing component/website bundler warnings remain.
+
+**Next:** Await user prioritisation; do not begin another backlog task automatically.
 
 ## 2026-10-23 — APP-02 complete
 

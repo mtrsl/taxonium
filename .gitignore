@@ -12,6 +12,10 @@ taxonium_backend/latest_public.jsonl.gz.1
 **/.pyc
 taxonium_component/dist
 taxonium_component/storybook-static/**
+taxonium_electron_standalone/dist/
+taxonium_electron_standalone/renderer/
+taxonium_electron_standalone/playwright-report/
+taxonium_electron_standalone/test-results/
 .DS_Store
 **/*.egg-info/**
 **/*.pyc

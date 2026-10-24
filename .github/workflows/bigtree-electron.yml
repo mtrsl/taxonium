@@ -1,0 +1,93 @@
+name: BigTree desktop builds
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/bigtree-electron.yml"
+      - "taxonium_component/**"
+      - "taxonium_website/**"
+      - "taxonium_electron_standalone/**"
+      - "electron-icon-pack/**"
+  push:
+    paths:
+      - ".github/workflows/bigtree-electron.yml"
+      - "taxonium_component/**"
+      - "taxonium_website/**"
+      - "taxonium_electron_standalone/**"
+      - "electron-icon-pack/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: mac-arm64
+            smoke: mac
+          - os: macos-15-intel
+            target: mac-x64
+            smoke: mac
+          - os: windows-2025
+            target: win-x64
+            smoke: windows
+          - os: ubuntu-24.04
+            target: linux-x64
+            smoke: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            taxonium_component/package-lock.json
+            taxonium_website/package-lock.json
+            taxonium_electron_standalone/package-lock.json
+      - name: Install and build component
+        working-directory: taxonium_component
+        env:
+          NODE_OPTIONS: --max-old-space-size=16384
+        run: npm ci && npm run build
+      - name: Install website dependencies
+        working-directory: taxonium_website
+        run: npm ci --ignore-scripts
+      - name: Install desktop dependencies
+        working-directory: taxonium_electron_standalone
+        run: npm ci
+      - name: Type check and test
+        working-directory: taxonium_electron_standalone
+        if: runner.os != 'Linux'
+        run: npm run check-types && npm test
+      - name: Type check and test on Linux
+        working-directory: taxonium_electron_standalone
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run check-types && xvfb-run -a npm test
+      - name: Build unpacked application
+        working-directory: taxonium_electron_standalone
+        env:
+          NODE_OPTIONS: --max-old-space-size=16384
+        run: npm run build
+      - name: Smoke launch packaged application
+        if: runner.os != 'Linux'
+        working-directory: taxonium_electron_standalone
+        run: npm run smoke:packaged
+      - name: Smoke launch packaged application on Linux
+        if: runner.os == 'Linux'
+        working-directory: taxonium_electron_standalone
+        run: xvfb-run -a npm run smoke:packaged
+      - name: Create distributable
+        working-directory: taxonium_electron_standalone
+        run: npm exec -- electron-builder
+      - name: Upload unsigned package
+        uses: actions/upload-artifact@v6
+        with:
+          name: bigtree-${{ matrix.target }}
+          path: taxonium_electron_standalone/dist/*.{dmg,zip,exe,AppImage}
+          if-no-files-found: error
+          retention-days: 14
