@@ -9,7 +9,7 @@ Do not automatically begin Next Task or other backlog items.
 # Current Status
 
 **Phase:** Final application improvements
-**Status:** APP-03 complete, including platform icons, package/UI authorship and native About-dialog follow-ups. APP-02, APP-01, COMP-02, COMP-01, VIS-01 and META-01–04 are also complete.
+**Status:** APP-03 phase-one artifact upload fix is implemented and locally validated; the user will push and confirm uploads for all four CI targets. The desktop application, platform icons, package/UI authorship and native About-dialog follow-ups are complete. APP-02, APP-01, COMP-02, COMP-01, VIS-01 and META-01–04 are also complete.
 
 APP-03 packages the existing local-file website as BigTree in Electron. It keeps browser-worker processing and serves the production renderer from a managed loopback server. The unsigned macOS arm64 DMG and ZIP were generated and verified; the packaged app opens and loads a tree with metadata. Native CI builds cover macOS arm64/x64, Windows x64 and Linux x64.
 
@@ -19,8 +19,14 @@ APP-03 packages the existing local-file website as BigTree in Electron. It keeps
 
 Package the current local-file website as a secure Electron application named BigTree. Keep worker-based file processing and provide unsigned macOS, Windows and Linux packages.
 
+**Current follow-up (2026-11-02):** Fix the GitHub Actions upload paths, keeping the existing triggers so the user can push and verify all four target artifacts. Change the workflow to run only on release-tag pushes in a separate phase after the user confirms those uploads.
+
 ### Checklist
 
+- [x] Diagnose the unsupported brace expansion in the upload path and confirm the phase-one scope with the user.
+- [x] Replace the brace expression with explicit DMG, ZIP, EXE and AppImage wildcard paths.
+- [x] Validate workflow YAML, package matching and relevant type checks; record the results and handoff.
+- [ ] User confirms successful GitHub uploads for macOS arm64/x64, Windows x64 and Linux x64.
 - [x] Use the OS-specific icons from `electron-icon-pack/` in macOS, Windows and Linux packages and the Linux application window.
 - [x] Rebuild and verify the packaged macOS app and update the APP-03 handoff.
 - [x] Record Theo Sanderson as package author and Matt Russell and John Lees as package contributors; keep email addresses in package metadata only.
@@ -38,7 +44,7 @@ Package the current local-file website as a secure Electron application named Bi
 
 # Next Task
 
-Await user prioritisation. Do not automatically start another backlog item.
+Await the user's confirmation that all four target artifacts upload successfully. Then handle the release-tag-only trigger change as a separate phase; do not begin it before that confirmation.
 
 ---
 
@@ -460,6 +466,13 @@ The project is complete when:
 
 # Design Notes
 
+## APP-03 — Artifact uploads, phase one (2026-11-02)
+
+- `actions/upload-artifact@v6` uses `@actions/glob`, which disables brace expansion. The existing `dist/*.{dmg,zip,exe,AppImage}` pattern therefore fails to find the generated packages.
+- Use four newline-separated paths under `taxonium_electron_standalone/dist/`: `*.dmg`, `*.zip`, `*.exe` and `*.AppImage`.
+- Keep the four-target matrix, unsigned packaging, artifact names, `if-no-files-found: error`, 14-day retention and existing push/pull-request/manual triggers for the verification run.
+- The user will push this fix and confirm GitHub artifact uploads. Restricting builds to release-tag pushes is a separate second phase after that confirmation.
+
 ## APP-03 — Approved implementation (2026-10-24)
 
 - Product name is **BigTree**. The package directory is `taxonium_electron_standalone/`, npm package is `bigtree-desktop`, and Electron application ID is `org.bigtree.desktop`.
@@ -654,6 +667,8 @@ Use the following format:
 
 # Blockers
 
+APP-03 phase one is ready for the user to push. GitHub upload confirmation for macOS arm64/x64, Windows x64 and Linux x64 is pending; the release-tag-only trigger phase waits for that confirmation.
+
 None for COMP-01, COMP-02 or the unified bottom-panel extension. URL, gzip, malformed-DOT and dataset-replacement paths were validated. The pending META-02 manual large-table check remains separate and is not an implementation blocker.
 
 Pending user validation (META-02, not an implementation blocker): manually check index construction, memory and interaction latency on the one-million-tip dataset. This was excluded from automated testing by request.
@@ -670,6 +685,20 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 ---
 
 # Session Log
+
+## 2026-11-02 — APP-03 artifact upload fix, phase one
+
+**Scope and result:** Replaced the unsupported brace expression in `.github/workflows/bigtree-electron.yml` with four explicit wildcard paths for DMG, ZIP, EXE and AppImage packages. Kept the current triggers and all other workflow settings for the user to verify the uploads after pushing.
+
+**Validation:**
+
+- Parsed the workflow with the installed `js-yaml` package and compared it with `HEAD`: only the upload path changed, including no changes to triggers or the four-target matrix.
+- Checked matching with Minimatch using the action's brace-disabled options: the old expression matched zero local packages; the new paths matched both existing macOS arm64 DMG and ZIP files.
+- Filename examples for macOS arm64/x64, Windows x64 and Linux x64 matched; sidecar metadata, blockmaps and unpacked executables were excluded.
+- Electron `npm run check-types` passed, including component TypeScript checks and Electron main/server syntax checks.
+- `git diff --check` passed.
+
+**Handoff:** The user will push the fix and confirm GitHub artifact uploads for all four targets. Native CI uploads have not been rerun locally. Begin the separate release-tag-only trigger phase only after that confirmation.
 
 ## 2026-10-24 — APP-03 complete
 

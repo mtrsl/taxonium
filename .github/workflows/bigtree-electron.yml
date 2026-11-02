@@ -88,6 +88,10 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: bigtree-${{ matrix.target }}
-          path: taxonium_electron_standalone/dist/*.{dmg,zip,exe,AppImage}
+          path: |
+            taxonium_electron_standalone/dist/*.dmg
+            taxonium_electron_standalone/dist/*.zip
+            taxonium_electron_standalone/dist/*.exe
+            taxonium_electron_standalone/dist/*.AppImage
           if-no-files-found: error
           retention-days: 14
