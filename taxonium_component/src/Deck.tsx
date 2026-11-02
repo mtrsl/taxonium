@@ -39,7 +39,7 @@ import type { Node, Mutation } from "./types/node";
 import type { ColorHook, ColorBy } from "./types/color";
 import type { MetadataMatrix } from "./types/metadataMatrix";
 import { darkenMetadataColor } from "./utils/metadataMatrix";
-import { metadataTooltipStyle } from "./utils/metadataTooltip";
+import { metadataTooltipStyle, metadataTooltipAppearance } from "./utils/metadataTooltip";
 
 const MemoizedKey = React.memo(Key);
 
@@ -424,7 +424,7 @@ function Deck({
         // of the browser
         triggerSVGdownload={triggerSVGdownload}
         deckSize={deckSize}
-        zoomReset={zoomReset}
+        zoomReset={() => zoomReset(config.treeBounds?.[xType])}
         zoomIncrement={zoomIncrement}
         zoomAxis={zoomAxis}
         setZoomAxis={setZoomAxis}
@@ -503,7 +503,7 @@ function Deck({
           const tooltip = getMetadataTooltip(info);
           return tooltip ? {
             ...tooltip,
-            style: metadataTooltipStyle(info.x, info.y, deckSize.width, deckSize.height),
+            style: { ...metadataTooltipAppearance, ...metadataTooltipStyle(info.x, info.y, deckSize.width, deckSize.height) },
           } : null;
         }}
         onHover={(info) => {

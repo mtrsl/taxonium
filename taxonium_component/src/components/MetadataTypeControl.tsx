@@ -14,7 +14,7 @@ export default function MetadataTypeControl({ field, metadata }: {
       <option value="numeric">Numeric</option>
       <option value="categorical">Categorical</option>
     </Select>
-    {spec.kind === "categorical" && <button type="button" className="border rounded px-1"
+    {spec.kind === "categorical" && <button type="button" className="tx-control"
       aria-label={`Reshuffle colours for ${field}`} onClick={() => metadata.reshuffle(field)}
       title="Generate a new palette for this column">Reshuffle colours</button>}
   </span>;

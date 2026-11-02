@@ -1,3 +1,5 @@
+import { minimalBasemap } from "../utils/minimalBasemap";
+import type { ReportViewStatus } from "../types/dataViewStatus";
 import prettifyName from "../utils/prettifyName";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Map as LibreMap, GeoJSONSource, StyleSpecification } from "maplibre-gl";
@@ -16,13 +18,14 @@ interface Props {
   field: string;
   metadataMatrix: MetadataMatrix;
   active: boolean;
+  onMapStatus?: ReportViewStatus;
 }
 const blankStyle: StyleSpecification = { version: 8, sources: {}, layers: [
   { id: "background", type: "background", paint: { "background-color": "#edf2f4" } },
 ] };
 const initialViewport = { bounds: [-180, -85.051129, 180, 85.051129] as GeographicRequest["bounds"], zoom: 0, width: 800, height: 400 };
 
-export default function GeographicMapPanel({ backend, config, selectedNodeId, field, metadataMatrix, active }: Props) {
+export default function GeographicMapPanel({ backend, config, selectedNodeId, field, metadataMatrix, active, onMapStatus }: Props) {
   const available = !!coordinateFields(Object.keys(config.metadataSummaries ?? {}));
   const [viewport, setViewport] = useState(initialViewport);
   const [page, setPage] = useState<GeographicPage>();
@@ -70,6 +73,13 @@ export default function GeographicMapPanel({ backend, config, selectedNodeId, fi
       fitPending.current = false;
     }
   };
+  const fitRef = useRef(fit); fitRef.current = fit;
+  useEffect(() => {
+    const current = pageSelection.current === selectionKey ? page : undefined;
+    onMapStatus?.({ busy: busy && active, total: current?.selectedCount, valid: current?.mappedCount,
+      ignored: current ? current.selectedCount - current.mappedCount : undefined,
+      fit: active && !busy && current?.bounds ? () => fitRef.current() : undefined });
+  }, [page, busy, active, selectionKey, onMapStatus]);
   const updateSource = () => {
     const map = mapRef.current, current = pageRef.current;
     if (!map || !current) return;
@@ -145,7 +155,7 @@ export default function GeographicMapPanel({ backend, config, selectedNodeId, fi
         const response = await fetch("https://tiles.openfreemap.org/styles/liberty", { signal: abort.signal });
         if (!response.ok) throw new Error("Basemap unavailable");
         const style = await response.json() as StyleSpecification;
-        if (!disposed && !fallback) map.setStyle(style);
+        if (!disposed && !fallback) map.setStyle(minimalBasemap(style));
       } catch { if (!disposed) setTileError(true); }
       finally { clearTimeout(timeout); }
     }).catch(err => { if (!disposed) setMapError(`Unable to initialise map: ${String(err)}`); });
@@ -169,12 +179,6 @@ export default function GeographicMapPanel({ backend, config, selectedNodeId, fi
   }, [page, selectionKey]);
 
   return <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-    <div style={{ display: "flex", gap: 12, padding: "6px 12px", alignItems: "center", flexWrap: "wrap" }}>
-      <span role="status">{!available ? "No latitude/longitude columns available." : busy ? "Updating map…" : page ?
-        `${page.mappedCount.toLocaleString()} of ${page.selectedCount.toLocaleString()} selected samples mapped` : "Loading map…"}</span>
-      <button type="button" onClick={fit} disabled={!page?.bounds}>Fit selection</button>
-      <span>{field === "genotype" ? "Neutral points: genotype colouring is not supported on the map." : spec ? `Colour: ${fieldLabel}` : "Uncoloured points"}</span>
-    </div>
     {(error || mapError) && <div role="alert">{error || mapError} <button onClick={() => setRetry(n => n + 1)}>Retry map</button></div>}
     {available && page && !page.mappedCount && <p style={{ padding: 12 }}>No valid coordinates in the selected samples.</p>}
     {tileError && <p role="status" style={{ padding: "0 12px" }}>Basemap unavailable; samples are shown on a plain background.</p>}

@@ -30,6 +30,7 @@ export interface NodesResponse {
 }
 
 export interface Config {
+  treeBounds?: Record<string, import("../utils/treeLayout").TreeBounds>;
   title?: string;
   source?: string;
   num_nodes: number;

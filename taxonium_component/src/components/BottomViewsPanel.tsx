@@ -1,3 +1,4 @@
+import type { ReportViewStatus } from "../types/dataViewStatus";
 import TimelinePanel from "./TimelinePanel";
 import type { TimelineSettings } from "../hooks/useTimeline";
 import { useId, useLayoutEffect, useRef, useState } from "react";
@@ -18,6 +19,8 @@ interface Props {
   field: string;
   metadataMatrix: MetadataMatrix;
   bottomView?: unknown;
+  onMapStatus?: ReportViewStatus;
+  onTimelineStatus?: ReportViewStatus;
   timeline?: TimelineSettings;
   onBottomViewChange: (view: BottomView) => void;
 }
@@ -63,10 +66,10 @@ export default function BottomViewsPanel(props: Props) {
       onPointerDown={event => { drag.current = { y: event.clientY, height: actualHeight }; event.currentTarget.setPointerCapture(event.pointerId); }}
       onPointerMove={event => { if (drag.current) resize(drag.current.height + drag.current.y - event.clientY); }}
       onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} />}
-    <button type="button" aria-expanded={open} className="text-left px-3 text-sm font-semibold shrink-0" style={{ height: 30 }} onClick={() => setOpen(value => !value)}>
+    <div className="tx-data-header"><button type="button" aria-expanded={open} className="text-left px-3 text-sm font-semibold shrink-0" style={{ height: 30 }} onClick={() => setOpen(value => !value)}>
       {open ? "▾" : "▸"} Data views
     </button>
-    {open && <div role="tablist" aria-label="Data view" className="flex shrink-0 flex-wrap border-b px-2" onKeyDown={event => {
+    {open && <div role="tablist" aria-label="Data view" className="flex shrink-0 flex-wrap" onKeyDown={event => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
       const enabled = tabs.filter(tab => !tab.disabled);
@@ -82,7 +85,7 @@ export default function BottomViewsPanel(props: Props) {
         className="tx-button px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ borderBottom: `2px solid ${activeTab === tab.value ? "#2563eb" : "transparent"}` }}
         onClick={() => props.onBottomViewChange(tab.value)}>{tab.label}</button>)}
-    </div>}
+    </div>}</div>
     <div key={dataset.version} className="grow min-h-0 flex-col" style={{ display: open ? "flex" : "none" }}>
       {tabs.map(tab => <div key={tab.value} role="tabpanel" id={`${id}-${tab.value}-panel`}
         aria-labelledby={`${id}-${tab.value}-tab`} hidden={!open || activeTab !== tab.value}

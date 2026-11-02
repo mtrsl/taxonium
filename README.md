@@ -110,3 +110,6 @@ We are very grateful to our contributors:
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 [Alex Kramer](https://corbett-lab.github.io/People/Current/alex/) at UCSC built the _Treenome Browser_ component within Taxonium, described [here](https://www.biorxiv.org/content/10.1101/2022.09.28.509985v1).
+
+
+For BigTree desktop prerequisites, npm installation, development, production builds and unsigned platform packages, see the [Electron build guide](taxonium_electron_standalone/README.md).

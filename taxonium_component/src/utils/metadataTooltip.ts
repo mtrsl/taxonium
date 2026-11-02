@@ -42,3 +42,9 @@ export function densityValueLabel(field: MetadataDensityField, row: number): str
   }
   return "Summary unavailable";
 }
+
+/** Shared appearance for the tree metadata and timeline hover surfaces. */
+export const metadataTooltipAppearance = {
+  position: "absolute", top: "0", left: "0", pointerEvents: "none", zIndex: "3",
+  color: "#a0a7b4", backgroundColor: "#29323c", padding: "10px", fontSize: "12px",
+} as const;

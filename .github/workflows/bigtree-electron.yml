@@ -39,11 +39,11 @@ jobs:
             taxonium_website/package-lock.json
             taxonium_electron_standalone/package-lock.json
 
-      - name: Install and build component
+      - name: Install, test and build component
         working-directory: taxonium_component
         env:
           NODE_OPTIONS: --max-old-space-size=8192
-        run: npm ci && npm run build
+        run: npm ci && npm test -- --run && npm run build
 
       - name: Install website dependencies
         working-directory: taxonium_website

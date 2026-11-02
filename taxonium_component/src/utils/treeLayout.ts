@@ -44,3 +44,12 @@ export function getTreeViewLayout(size: DeckSize, thickness: number, preference:
   return { rotated, tree, metadata, metadataThickness,
     canonicalTreeSize: rotated ? { width: tree.height, height: tree.width } : { width: tree.width, height: tree.height } };
 }
+
+export type TreeBounds = [number, number, number, number]; // minX, maxX, minY, maxY in canonical coordinates
+export function fitTreeCamera(bounds: TreeBounds, size: DeckSize, padding = 24) {
+  const [minX, maxX, minY, maxY] = bounds;
+  if (!bounds.every(Number.isFinite) || maxX < minX || maxY < minY) throw new Error("Invalid tree bounds");
+  const fit = (pixels: number, span: number) => Math.max(-20, Math.min(20, Math.log2(Math.max(1, pixels - 2 * padding) / Math.max(span, 1))));
+  return { target: [(minX + maxX) / 2, (minY + maxY) / 2] as [number, number],
+    zoom: [fit(size.width, maxX - minX), fit(size.height, maxY - minY)] as [number, number] };
+}

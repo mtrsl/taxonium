@@ -3,7 +3,7 @@ import { OrthographicView, OrthographicController } from "@deck.gl/core";
 import type { OrthographicViewProps } from "@deck.gl/core";
 import type { Settings } from "../types/settings";
 import type { DeckSize } from "../types/common";
-import { getTreeViewLayout, orientCamera, identityMatrix, swapAxesMatrix, type TreeViewLayout } from "../utils/treeLayout";
+import { getTreeViewLayout, fitTreeCamera, type TreeBounds, orientCamera, identityMatrix, swapAxesMatrix, type TreeViewLayout } from "../utils/treeLayout";
 import type { ViewState } from "../types/view";
 
 interface ViewStateChangeParameters<ViewStateT> {
@@ -226,9 +226,9 @@ const useView = ({
     [deriveViewState, zoomAxis, layout.rotated]
   );
 
-  const zoomReset = useCallback(() => {
-    setViewState(deriveViewState(defaultViewState));
-  }, [deriveViewState]);
+  const zoomReset = useCallback((bounds?: TreeBounds) => {
+    setViewState(deriveViewState(bounds ? { ...defaultViewState, ...fitTreeCamera(bounds, layout.canonicalTreeSize) } : defaultViewState));
+  }, [deriveViewState, layout.canonicalTreeSize]);
 
   const displayViewState = useMemo(() => {
     const derived = deriveViewState(viewState);
@@ -275,6 +275,6 @@ export interface View {
   mouseXY: number[];
   setMouseXY: React.Dispatch<React.SetStateAction<number[]>>;
   baseViewState: ViewState;
-  zoomReset: () => void;
+  zoomReset: (bounds?: TreeBounds) => void;
   layout: TreeViewLayout;
 }

@@ -1,3 +1,6 @@
+import type { DataViewOptions } from "../hooks/useDataViewOptions";
+import { coordinateFields } from "../utils/geography";
+import { FaChartBar, FaTable, FaGlobe } from "react-icons/fa";
 import type { TimelineSettings } from "../hooks/useTimeline";
 import MetadataTypeControl from "./MetadataTypeControl";
 import SearchTopLayerItem from "./SearchTopLayerItem";
@@ -60,6 +63,7 @@ interface SearchPanelProps {
   colorBy: ColorBy;
   metadataMatrix: MetadataMatrix;
   timeline?: TimelineSettings;
+  dataViewOptions?: DataViewOptions;
   config: Config;
   selectedDetails: SelectedDetails;
   overlayContent: OverlayContent["content"];
@@ -83,6 +87,7 @@ function SearchPanel({
   colorBy,
   metadataMatrix,
   timeline,
+  dataViewOptions,
   config,
   selectedDetails,
   overlayContent,
@@ -279,13 +284,12 @@ function SearchPanel({
   return (
     <div
       className={classNames(
-        "flex flex-col px-4 divide-y text-sm border-gray-200",
+        "tx-sidebar flex flex-col px-3 divide-y text-sm border-gray-200",
         className
       )}
     >
       <div className="flex items-center justify-between border-gray-200">
         <button onClick={toggleSidebar} className="border-gray-200">
-          <br />
           {window.innerWidth > 768 ? (
             <MdArrowForward className="mx-auto w-5 h-5 sidebar-toggle border-gray-200" />
           ) : (
@@ -411,18 +415,13 @@ function SearchPanel({
             </span>
           )}
       </div>
-      <div className="py-3 space-y-2 border-gray-200">
+      <div className="py-1 border-gray-200">
+        <details className="tx-disclosure">
+          <summary><BiPalette />Colour by<span className="tx-summary">{prettifyName(colorBy.colorByField, config)}</span></summary>
+          <div className="space-y-2">
         <div className="flex space-x-2">
-          <h2 className="font-bold text-gray-700 flex items-center whitespace-nowrap">
-            <BiPalette className="mr-1.5 text-gray-500 h-5 w-5" />
-            {
-              // if locale is US return "Color by" otherwise "Colour by" :sob:
-              window.navigator.language === "en-US" ? "Color by" : "Colour by"
-            }
-            :
-          </h2>
             <Select
-              value={colorBy.colorByField}
+              aria-label="Colour by" value={colorBy.colorByField}
               onChange={(e: ChangeEvent<HTMLSelectElement>) =>
                 colorBy.setColorByField?.(e.target.value)
               }
@@ -470,8 +469,20 @@ function SearchPanel({
             </label>
           </div>
         )}
-        {backend.type === "local" && timeline && <details className="space-y-2 border-t border-gray-100 pt-3">
-          <summary className="cursor-pointer font-bold text-gray-700">Timeline display</summary>
+          </div>
+        </details>
+        {backend.type === "local" && <details className="tx-disclosure">
+          <summary><FaGlobe />Map options</summary>
+          <button type="button" className="tx-control" onClick={() => dataViewOptions?.map?.fit?.()} disabled={!dataViewOptions?.map?.fit}>Fit selection</button>
+          <div className="text-xs text-gray-600">{(() => {
+            const fields = coordinateFields(Object.keys(config.metadataSummaries ?? {}));
+            return fields ? <>Latitude: {prettifyName(fields[0], config)}<br />Longitude: {prettifyName(fields[1], config)}</> : "No latitude/longitude columns available.";
+          })()}</div>
+          {dataViewOptions?.map && <ViewCounts status={dataViewOptions.map} mapped />}
+          {colorBy.colorByField === "genotype" && <p className="text-xs">Neutral points: genotype colouring is not supported on the map.</p>}
+        </details>}
+        {backend.type === "local" && timeline && <details className="tx-disclosure">
+          <summary><FaChartBar />Timeline display</summary>
           <label className="flex flex-col gap-1 text-xs text-gray-700">Date source
             <select className="rounded-sm border p-1" aria-label="Timeline date source" value={timeline.source} disabled={!timeline.sources.length}
               onChange={(event: ChangeEvent<HTMLSelectElement>) => timeline.setSource(event.target.value)}>
@@ -479,11 +490,13 @@ function SearchPanel({
               {timeline.sources.map(source => <option key={source.id} value={source.id}>{source.label} ({source.precision})</option>)}
             </select>
           </label>
+          {dataViewOptions?.timeline && <ViewCounts status={dataViewOptions.timeline} />}
+          {colorBy.colorByField === "genotype" && <p className="text-xs">Neutral bars: genotype colouring is not supported.</p>}
           {timeline.error && <p role="alert">{timeline.error} <button type="button" onClick={timeline.retry}>Retry timeline</button></p>}
         </details>}
-        <details className="space-y-2 border-t border-gray-100 pt-3">
+        <details className="tx-disclosure">
           <summary className="cursor-pointer font-bold text-gray-700">
-            Metadata matrix
+            <FaTable />Metadata matrix
             {metadataMatrix.selectedFields.length > 0 && (
               <span className="ml-2 text-xs font-normal text-gray-500">
                 {metadataMatrix.selectedFields.length} columns
@@ -584,14 +597,9 @@ function SearchPanel({
           )}
         </details>
       </div>
-      <div className="py-3 flex flex-col md:min-h-0 border-gray-200">
-        <h2 className="font-bold text-gray-700 flex justify-between items-center mb-2">
-          <div className="flex items-center">
-            <FaSearch className="ml-1 mr-1.5 text-gray-500 h-4 w-4" />
-            Search
-          </div>
-          <SearchDisplayToggle settings={settings} />
-        </h2>
+      <details className="tx-disclosure min-h-0">
+        <summary><FaSearch />Search<span className="tx-summary">{search.searchSpec.length} {search.searchSpec.length === 1 ? "search" : "searches"}</span></summary>
+        <div className="flex justify-end"><SearchDisplayToggle settings={settings} /></div>
         <div className="space-y-2 md:overflow-y-auto -mr-4 pr-4">
           {search.searchSpec.map((item) => (
             <SearchTopLayerItem
@@ -610,9 +618,9 @@ function SearchPanel({
             <span>Add a new search</span>
           </Button>
         </div>
-      </div>
+      </details>
       {selectedNodeDetails && (
-        <div className="py-3 px-4 md:px-0 mb-0 fixed bottom-0 left-0 right-0 bg-white md:static shadow-2xl md:shadow-none overflow-auto border-gray-200">
+        <div className="py-2 bg-white border-gray-200">
           <ListOutputModal
             nodeId={selectedNodeDetails.node_id}
             backend={backend}
@@ -734,3 +742,10 @@ function SearchPanel({
 }
 
 export default SearchPanel;
+
+function ViewCounts({ status, mapped = false }: { status: import("../types/dataViewStatus").DataViewStatus; mapped?: boolean }) {
+  if (!status.busy && status.total === undefined) return null;
+  return <p role="status" className="text-xs text-gray-600">{status.busy ? "Updating…" : status.total === undefined ? "" :
+    <>{status.valid?.toLocaleString()} of {status.total.toLocaleString()} selected samples {mapped ? "mapped" : "dated"}
+      <br />{status.ignored?.toLocaleString()} missing or invalid {mapped ? "coordinates" : "dates"} ignored</>}</p>;
+}

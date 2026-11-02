@@ -1,3 +1,4 @@
+import { CgListTree } from "react-icons/cg";
 import {
   BiZoomIn,
   BiZoomOut,
@@ -73,6 +74,10 @@ export const DeckButtons = ({
             <ClipLoader size={24} color="#444444" />
           </div>
         )}
+        <a href="https://taxonium.org" target="_blank" rel="noopener noreferrer" aria-label="Taxonium"
+          className="flex items-center gap-1 text-xs bg-white px-1 self-center" style={{ pointerEvents: "auto" }}>
+          <CgListTree aria-hidden="true" />Taxonium
+        </a>
         <label style={{ pointerEvents: "auto", background: "white", alignSelf: "center", fontSize: "12px", padding: "4px", marginLeft: "auto" }}>
           Layout{" "}
           <select style={{ width: 112, padding: "2px 24px 2px 6px" }} aria-label="Tree layout" value={settings.treenomeEnabled ? "standard" : settings.treeLayout ?? "standard"}

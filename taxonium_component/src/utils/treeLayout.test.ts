@@ -43,3 +43,23 @@ it("bounds metadata space on resize, omits empty panels and overrides rotation f
   expect(treenome.rotated).toBe(false);
   expect(treenome.tree.width + treenome.metadata.width).toBe(156);
 });
+
+it("fits full canonical bounds with padding after resize, rotation and Treenome layout", async () => {
+  const { fitTreeCamera } = await import("./treeLayout");
+  const bounds: [number, number, number, number] = [-40, 750, 30, 2000];
+  for (const size of [{ width: 1200, height: 800 }, { width: 390, height: 300 }])
+    for (const orientation of ["standard", "rotated"] as const)
+      for (const treenome of [false, true]) {
+        const layout = getTreeViewLayout(size, 90, orientation, treenome);
+        const camera = fitTreeCamera(bounds, layout.canonicalTreeSize);
+        const viewport = new OrthographicViewport({ ...layout.tree, ...orientCamera(camera, layout.rotated) });
+        const centre = viewport.project(orientPoint(camera.target, layout.rotated));
+        expect(centre[0]).toBeCloseTo(layout.tree.width / 2);
+        expect(centre[1]).toBeCloseTo(layout.tree.height / 2);
+        for (const point of [[bounds[0], bounds[2]], [bounds[1], bounds[3]]]) {
+          const pixel = viewport.project(orientPoint(point, layout.rotated));
+          expect(pixel[0]).toBeGreaterThanOrEqual(23.99); expect(pixel[0]).toBeLessThanOrEqual(layout.tree.width - 23.99);
+          expect(pixel[1]).toBeGreaterThanOrEqual(23.99); expect(pixel[1]).toBeLessThanOrEqual(layout.tree.height - 23.99);
+        }
+      }
+});

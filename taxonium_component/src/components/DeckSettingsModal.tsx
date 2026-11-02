@@ -26,11 +26,6 @@ const settingsModalStyle = {
   },
 };
 
-const prettifyMutationTypes: Record<string, string> = {
-  aa: "Amino acid",
-  nt: "Nucleotide",
-};
-
 interface DeckSettingsModalProps {
   settings: Settings;
   deckSettingsOpen: boolean;
@@ -80,7 +75,7 @@ const DeckSettingsModal = ({
               <label>
                 Minimap position{" "}
                 <select
-                  className="ml-2 border rounded px-2 py-1"
+                  className="tx-control ml-2"
                   value={settings.minimapPosition}
                   onChange={(event) =>
                     settings.setMinimapPosition(
@@ -123,29 +118,6 @@ const DeckSettingsModal = ({
                 Display points for internal nodes
               </label>
             </div>
-          </div>
-          <div className="space-y-3 mt-6">
-            <h3 className="font-medium">Mutation types enabled</h3>
-            {Object.keys(settings.mutationTypesEnabled).map((key) => (
-              <div key={key}>
-                <label>
-                  <input
-                    type="checkbox"
-                    className="mr-1"
-                    checked={settings.mutationTypesEnabled[key]}
-                    onChange={() =>
-                      settings.setMutationTypeEnabled(
-                        key,
-                        !settings.mutationTypesEnabled[key]
-                      )
-                    }
-                  />{" "}
-                  {prettifyMutationTypes[key]
-                    ? prettifyMutationTypes[key]
-                    : key}
-                </label>
-              </div>
-            ))}
           </div>
         </TabPanel>
 

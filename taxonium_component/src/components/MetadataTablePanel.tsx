@@ -112,19 +112,19 @@ export default function MetadataTablePanel({ backend, config, selectedNodeId, me
     }, value);
   };
   return <>
-    <div className="flex flex-wrap items-center gap-3 border-b px-3 py-1 text-xs shrink-0">
+    <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1 text-xs shrink-0">
       <span>{selectedNodeId === null ? "All samples" : `Selected node ${selectedNodeId}`}</span>
       <span role="status" aria-live="polite">{data ? `${data.total.toLocaleString()} samples · ${data.total ? data.pageIndex * METADATA_TABLE_PAGE_SIZE + 1 : 0}–${Math.min(data.total, (data.pageIndex + 1) * METADATA_TABLE_PAGE_SIZE)} shown` : response ? "Unable to load samples" : "Loading samples…"}</span>
-      <button type="button" aria-label="First table page" disabled={!data || page === 0} onClick={() => setPage(0)}>First</button>
-      <button type="button" aria-label="Previous table page" disabled={!data || page === 0} onClick={() => setPage(page - 1)}>Previous</button>
+      <button className="tx-control" type="button" aria-label="First table page" disabled={!data || page === 0} onClick={() => setPage(0)}>First</button>
+      <button className="tx-control" type="button" aria-label="Previous table page" disabled={!data || page === 0} onClick={() => setPage(page - 1)}>Previous</button>
       <form onSubmit={event => { event.preventDefault(); const n = Number(pageInput); if (data && Number.isInteger(n)) setPage(Math.max(0, Math.min(pages - 1, n - 1))); }}>
         <label>Page <input aria-label="Table page" type="number" min={1} max={pages} value={pageInput} disabled={!data}
-          onChange={event => setPageInput(event.target.value)} className="border rounded px-1" style={{ width: 72 }} /></label>
+          onChange={event => setPageInput(event.target.value)} className="tx-control" style={{ width: 60 }} /></label>
         <span> of {data ? pages.toLocaleString() : "…"}</span>
-        <button type="submit" disabled={!data} className="ml-2">Go</button>
+        <button type="submit" disabled={!data} className="tx-control ml-2">Go</button>
       </form>
-      <button type="button" aria-label="Next table page" disabled={!data || page >= pages - 1} onClick={() => setPage(page + 1)}>Next</button>
-      <button type="button" aria-label="Last table page" disabled={!data || page >= pages - 1} onClick={() => setPage(pages - 1)}>Last</button>
+      <button className="tx-control" type="button" aria-label="Next table page" disabled={!data || page >= pages - 1} onClick={() => setPage(page + 1)}>Next</button>
+      <button className="tx-control" type="button" aria-label="Last table page" disabled={!data || page >= pages - 1} onClick={() => setPage(pages - 1)}>Last</button>
       <span className="grow" />
       <ColumnChooser fields={allFields} hidden={hidden} setHidden={setHidden} config={config} />
     </div>

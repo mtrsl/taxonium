@@ -73,7 +73,7 @@ export const Select = ({
     <select
       aria-label={ariaLabel}
       className={classNames(
-        "border bg-white text-gray-900 text-sm hover:text-gray-700 py-1 pl-2 pr-6",
+        "tx-control bg-white text-gray-900 hover:text-gray-700",
         "focus:ring-gray-800 focus:border-gray-800",
         className
       )}

@@ -1,3 +1,4 @@
+import useDataViewOptions from "./hooks/useDataViewOptions";
 import useTimeline from "./hooks/useTimeline";
 import BottomViewsPanel from "./components/BottomViewsPanel";
 import type { BottomView } from "./components/BottomViewsPanel";
@@ -182,6 +183,7 @@ function Taxonium({
   const selectedDetails = useNodeDetails("selected", backend);
 
   const timeline = useTimeline(backend);
+  const dataViewOptions = useDataViewOptions(backend, selectedDetails.selectedNodeId, timeline.source);
   const config = useConfig(
     backend,
     view,
@@ -357,7 +359,7 @@ function Taxonium({
           <div
             className={
               sidebarOpen
-                ? "grow min-h-0 h-1/2 md:h-full 2xl:w-1/4 bg-white shadow-xl border-t md:border-0 overflow-y-auto md:overflow-hidden" +
+                ? "grow min-h-0 h-1/2 md:h-full 2xl:w-1/4 bg-white shadow-xl border-t md:border-0 overflow-y-auto" +
                   (settings.treenomeEnabled ? " md:w-1/4" : " md:w-1/3")
                 : "bg-white shadow-xl"
             }
@@ -375,10 +377,11 @@ function Taxonium({
 
             {sidebarOpen && (
               <SearchPanel
-                className="grow min-h-0 h-full bg-white shadow-xl border-t md:border-0 overflow-y-auto md:overflow-hidden"
+                className="grow min-h-0 h-full bg-white shadow-xl border-t md:border-0 overflow-y-auto"
                 backend={backend}
                 search={search}
                 colorBy={colorBy}
+                dataViewOptions={dataViewOptions}
                 timeline={timeline}
                 metadataMatrix={metadataMatrix}
                 colorHook={colorHook}
@@ -401,6 +404,7 @@ function Taxonium({
         </div>
         {backend.type === "local" && backend.queryMetadataTable && <BottomViewsPanel backend={backend} config={config}
           selectedNodeId={selectedDetails.selectedNodeId} field={colorBy.colorByField} metadataMatrix={metadataMatrix}
+          onMapStatus={dataViewOptions.reportMap} onTimelineStatus={dataViewOptions.reportTimeline}
           timeline={timeline} bottomView={query.bottomView} onBottomViewChange={setBottomView} />}
       </div>
     </GlobalErrorBoundary>

@@ -258,6 +258,20 @@ const getConfig = async () => {
   generateConfig(config, processedUploadedData);
 
   config.mutations = processedUploadedData.mutations;
+  // Cache full-dataset fit bounds once, never derive reset geometry from rendered/selected tips.
+  if (!processedUploadedData.treeBounds) {
+    const bounds = {};
+    for (const field of ["x_dist", "x_time"]) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const node of processedUploadedData.nodes) if (Number.isFinite(node[field]) && Number.isFinite(node.y)) {
+        minX = Math.min(minX, node[field]); maxX = Math.max(maxX, node[field]);
+        minY = Math.min(minY, node.y); maxY = Math.max(maxY, node.y);
+      }
+      if (minX !== Infinity) bounds[field] = [minX, maxX, minY, maxY];
+    }
+    processedUploadedData.treeBounds = bounds;
+  }
+  config.treeBounds = processedUploadedData.treeBounds;
 
 
   const merged_config = {

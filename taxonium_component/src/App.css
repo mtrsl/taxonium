@@ -88,3 +88,19 @@ button[data-testid="addTrackNextButton"] {
 .timeline-range::-webkit-slider-thumb { appearance: none; width: 13px; height: 20px; border: 1px solid white; border-radius: 3px; background: #2563eb; cursor: ew-resize; pointer-events: auto; }
 .timeline-range::-moz-range-thumb { width: 13px; height: 20px; border: 1px solid white; border-radius: 3px; background: #2563eb; cursor: ew-resize; pointer-events: auto; }
 .timeline-range:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+/* Shared compact controls; native selects retain their keyboard behaviour. */
+.tx-control, select, .tx-disclosure > summary {
+  box-sizing: border-box; min-height: 24px; height: 24px; font-size: 12px; line-height: 18px;
+}
+select.tx-control, select { max-width: 100%; padding: 1px 22px 1px 6px !important; border: 1px solid #cbd5e1; border-radius: 3px; background-color: white; }
+.tx-control { display: inline-flex; align-items: center; justify-content: center; gap: 4px; max-width: 100%; padding: 1px 6px; border: 1px solid #cbd5e1; border-radius: 3px; background: #f8fafc; color: #374151; }
+.tx-control:disabled { opacity: .5; cursor: default; }
+.tx-disclosure { border-top: 1px solid #e5e7eb; padding: 6px 0; }
+.tx-disclosure > summary { cursor: pointer; font-weight: 600; color: #374151; white-space: nowrap; }
+.tx-disclosure > summary svg { display: inline-block; vertical-align: -2px; margin-right: 5px; width: 14px; height: 14px; }
+.tx-disclosure > summary .tx-summary { font-weight: 400; font-size: 11px; color: #6b7280; margin-left: 6px; max-width: 50%; display: inline-block; vertical-align: bottom; overflow: hidden; text-overflow: ellipsis; }
+.tx-disclosure > :not(summary) { margin-top: 6px; }
+.tx-data-header { display: flex; flex-wrap: wrap; align-items: center; flex-shrink: 0; min-height: 30px; border-bottom: 1px solid #e5e7eb; }
+
+.tx-sidebar > *, .tx-disclosure { flex-shrink: 0; }

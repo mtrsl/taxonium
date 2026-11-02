@@ -9,32 +9,34 @@ Do not automatically begin Next Task or other backlog items.
 # Current Status
 
 **Phase:** Final application improvements
-**Status:** COMP-03 is complete: worker-aggregated Timeline, date-source settings, shared metadata colours, selected-clade scope and accessible range zoom are implemented and validated with pf and the large tree. The approved zoom-only fallback is active because the linked-filter performance gate failed. BigTree was rebuilt and the unsigned macOS arm64 DMG/ZIP were verified, including pf in the packaged application. APP-03 Linux native smoke/upload confirmation and the separately gated release-trigger change remain pending.
+**Status:** UI-01 is complete. Controls and sidebar sections are compact, Data views tabs share their heading row, Timeline spacing/tooltips and the country-outline map are polished, and Reset zoom fits the measured tree viewport. pf browser and packaged BigTree checks, 98 component tests, type checks, builds, Electron tests and unsigned macOS arm64 archive verification passed. Build documentation and the existing four-platform GitHub build workflow were updated. Existing APP-03 external/native-CI follow-ups remain separate.
 
 APP-03 packages the existing local-file website as BigTree in Electron. It keeps browser-worker processing and serves the production renderer from a managed loopback server. The unsigned macOS arm64 DMG and ZIP were generated and verified; the packaged app opens and loads a tree with metadata. Native CI builds cover macOS arm64/x64, Windows x64 and Linux x64.
 
 # Current Task
 
-## COMP-03 — Timeline
+## UI-01 — Final UI polish and space optimisation
 
-Implement the approved stacked timeline in Data views, with date-source controls in Options → Timeline display. Validate pf, benchmark the large tree using a temporary dated CSV, and rebuild BigTree Electron.
+Implement the approved UI refinement phase without changing metadata, selection or worker aggregation behaviour.
 
 ### Checklist
 
-- [x] Add strict date discovery/indexing and bounded worker aggregation using shared metadata colours.
-- [x] Add Timeline tab, sidebar date-source selector, overview and accessible range handles.
-- [x] Measure worker linked-filter preparation plus tree refresh at million-tip scale; enable linked views only if warmed p95 is within one second, otherwise ship the approved zoom-only fallback.
-- [x] Validate date edge cases, pf counts, selection, recolouring, replacement and browser interactions.
-- [x] Run type checks, relevant tests, Electron build, packaged smoke and unsigned macOS arm64 packaging.
-- [x] Record design decisions, measurements, validation and handoff.
+- [x] Compact shared controls, sidebar disclosures/icons and inline Data views tabs.
+- [x] Timeline bar spacing, controlled tooltips, compact range controls and sidebar counts.
+- [x] Minimal country-outline map, sidebar Fit selection/coordinate fields/counts, full-height canvas.
+- [x] Restore viewer branding, remove mutation controls and fit Reset zoom to measured tree space.
+- [x] Document builds and validate the existing GitHub application-build workflow.
+- [x] Run type checks, tests, pf browser checks and Electron build/package validation.
+- [x] Record final decisions, validation, Current Status and handoff.
 
-### Design notes
 
-Approved defaults: prefer calendar components then conventional ISO date names then metadata order; use the coarsest valid dataset precision per source. Maximum 512 time bins and 16 numeric colour ranges. Keep date arrays in the worker, cancel stale queries and bound responses. Range state is dataset-local; the tab uses `bottomView=timeline`. Export behaviour is unchanged. Linked filtering has an explicit performance gate and zoom-only fallback. Preserve original test fixtures and pending APP-03 release/upload work.
+### Design Notes
+
+Approved: Colour by and Search are collapsible and initially closed; coordinate labels are informational; retain OpenFreeMap and attribution with a minimal outline style and offline fallback; Reset zoom fits the full dataset with 24px padding in the measured viewport. Timeline bars cap at 32 CSS pixels within unchanged time slots. Rebuild unsigned macOS arm64 artifacts. The existing tag-triggered four-platform BigTree workflow already builds the application; preserve triggers and release configuration and validate/reuse it rather than add a duplicate action.
 
 # Next Task
 
-Await user prioritization. Pending APP-03 upload confirmation and release-tag-only trigger changes remain separate; do not start them or another backlog item automatically.
+Await explicit user prioritization. Do not start another task or change release triggers/publishing automatically.
 
 ---
 
@@ -446,6 +448,83 @@ Design considerations:
 - Package unsigned macOS arm64/x64, Windows x64 and Linux x64 builds through native GitHub Actions runners.
 - Keep the browser-based application functional unless explicitly instructed otherwise.
 
+### UI-01 — Final UI polish and space optimisation
+
+**Status:** Complete (2026-11-02); see the completion session below.
+
+**Dependencies:** Timeline, map, metadata table, and tree viewer components implemented.
+**Scope:** Cosmetic improvements, layout refinements, and minor UI bug fixes.
+
+Improve the visual consistency and space efficiency of the application. These changes should be implemented together as a single UI refinement phase.
+
+Do not introduce substantial architectural changes or modify underlying data processing, filtering, or visualisation logic unless necessary to correct an identified UI bug.
+
+#### Timeline
+
+- [x] Remove the "drag handles to zoom" instruction and the associated linked-filtering message.
+- [x] Apply a maximum visual bar width so that bars do not become excessively wide.
+- [x] Pad bars with whitespace where necessary so that the timeline remains correctly aligned across the full displayed range.
+- [x] Make the "Reset range" button smaller and position it inline with the currently selected range, matching its height.
+- [x] Make timeline tooltips appear with the same hover delay, styling, and behaviour as tooltips in the metadata viewer.
+- [x] Remove the redundant `Year · year ·` prefix from the timeline title.
+- [x] Ensure these changes work correctly when the timeline is resized or its range changes.
+
+#### Map
+
+- [x] Replace the current coloured map tiles with a minimal basemap showing country outlines.
+- [x] Preserve geographic orientation, zooming, panning, and point positioning.
+- [x] Add a "Map options" dropdown containing:
+  - The existing "Fit selection" action.
+  - The metadata fields currently used for latitude and longitude.
+- [x] Remove the existing lower-panel header bar containing these controls.
+- [x] Ensure the map uses the additional available vertical space.
+
+#### General layout and controls
+
+- [x] Move the "x of y samples" counters and missing/invalid data counts for the map and timeline into the right-hand options sidebar.
+- [x] Place the Table, Map, Embedding, and Timeline view selectors inline with the "Data views" heading to reduce vertical space.
+- [x] Standardise dropdown heights to match the existing "Reshuffle colours" buttons.
+- [x] Apply the same compact dropdown styling to:
+  - Metadata table page selector.
+  - Minimap position selector.
+  - Other relevant dropdown controls.
+- [x] Convert the "Colour by:" control into a compact dropdown.
+- [x] Convert the "Search" control into a compact dropdown, preserving its existing search functionality.
+- [x] Add simple, visually consistent icons to the Timeline, Metadata matrix, and Map options dropdowns.
+- [x] Ensure dropdowns, buttons, and labels are vertically aligned and consistently spaced.
+- [x] Avoid unnecessary empty space, margins, and padding across the affected panels.
+
+#### Taxonium tree viewer
+
+- [x] Restore the Taxonium logo within the tree viewer component, rather than in the removed application-level top bar.
+- [x] Remove the "Mutation types enabled" option from the options panel.
+- [x] Fix the "Reset zoom" button so that it correctly centres the tree in the available viewport rather than positioning it towards the right.
+- [x] Verify that reset zoom behaves correctly after resizing the viewer and changing tree orientation.
+
+#### Design constraints
+
+- Reuse existing UI components, styling conventions, and icon libraries where practical.
+- Prefer shared styling changes over repeated component-specific CSS overrides.
+- Preserve existing metadata colouring, sample selection, filtering, and visualisation behaviour.
+- Avoid adding dependencies solely for minor cosmetic improvements.
+- Ensure controls remain accessible and usable at different screen sizes.
+- Keep the right-hand options sidebar organised and avoid introducing unnecessary scrolling.
+- Do not remove functionality when relocating or simplifying controls.
+- Keep the Taxonium logo within the tree viewer without reintroducing the application-level navigation bar.
+
+#### Validation
+
+- [x] Run `npm run check-types` in the relevant package.
+- [x] Run `npm run build` in `taxonium_component/`.
+- [x] Verify the affected views interactively using `taxonium_website/`.
+- [x] Check layout at different browser window sizes.
+- [x] Verify that map and timeline selection/filtering behaviour remains unchanged.
+- [x] Verify that the timeline bars and labels remain correctly aligned.
+- [x] Verify that dropdowns, tooltips, and icons are visually consistent.
+- [x] Verify that reset zoom correctly centres the tree.
+- [x] Record any relevant design decisions in Design Notes.
+- [x] Update Current Status, Session Log, and Next Task.
+
 #### Documentation
 
 Add build instructions covering:
@@ -458,7 +537,7 @@ Add build instructions covering:
 - Running the packaged application.
 - Known platform-specific limitations.
 
-Add a github action which builds the application
+Add a github action which builds the application. **Complete:** Reused the existing four-platform BigTree action and added component unit tests to its install/test/build step; retained its tag triggers, native targets and release job.
 
 # Definition of Done
 
@@ -493,6 +572,11 @@ The project is complete when:
 - [x] All relevant validation passes.
 - [x] Cross-component selection and colouring are consistent.
 - [x] `plan.md` reflects the final implementation state.
+- [ ] Final UI polish is complete across the timeline, map, metadata views, and tree viewer.
+- [ ] Controls use consistent dimensions, styling, and tooltip behaviour.
+- [ ] Unnecessary headers, labels, and whitespace have been removed.
+- [ ] Tree reset zoom correctly centres the visible tree.
+- [ ] Existing visualisation, selection, and filtering functionality remains intact.
 
 ---
 
@@ -1136,3 +1220,56 @@ Read the authoritative plan and preserved its existing COMP-03 requirements and 
 **Blockers/unresolved:** None for COMP-03. Linked date filtering remains deferred by the explicitly approved performance fallback. Previously recorded APP-03 upload/native Linux confirmation and META-02 manual checks remain separate.
 
 **Next:** Await explicit user prioritization; do not start another task automatically.
+
+
+## COMP-03 handoff retained
+
+## COMP-03 — Timeline
+
+Implement the approved stacked timeline in Data views, with date-source controls in Options → Timeline display. Validate pf, benchmark the large tree using a temporary dated CSV, and rebuild BigTree Electron.
+
+### Checklist
+
+- [x] Add strict date discovery/indexing and bounded worker aggregation using shared metadata colours.
+- [x] Add Timeline tab, sidebar date-source selector, overview and accessible range handles.
+- [x] Measure worker linked-filter preparation plus tree refresh at million-tip scale; enable linked views only if warmed p95 is within one second, otherwise ship the approved zoom-only fallback.
+- [x] Validate date edge cases, pf counts, selection, recolouring, replacement and browser interactions.
+- [x] Run type checks, relevant tests, Electron build, packaged smoke and unsigned macOS arm64 packaging.
+- [x] Record design decisions, measurements, validation and handoff.
+
+### Design notes
+
+Approved defaults: prefer calendar components then conventional ISO date names then metadata order; use the coarsest valid dataset precision per source. Maximum 512 time bins and 16 numeric colour ranges. Keep date arrays in the worker, cancel stale queries and bound responses. Range state is dataset-local; the tab uses `bottomView=timeline`. Export behaviour is unchanged. Linked filtering has an explicit performance gate and zoom-only fallback. Preserve original test fixtures and pending APP-03 release/upload work.
+
+
+## 2026-11-02 — UI-01 started
+
+Read the current plan, including the added GitHub action requirement. Reusing the existing application-build action; implementing the approved UI and packaged-app validation scope.
+
+
+## 2026-11-02 — UI-01 complete
+
+**Delivered:** Compact Colour by and Search disclosures (initially closed, state retained), matching icons on Timeline/Metadata matrix/Map options, 24px controls, and a shared Data views heading/tab row with existing keyboard navigation, resizing and collapse behaviour. Map options owns Fit selection, read-only detected coordinate names and counts. Timeline display owns date selection and selected/dated/ignored counts. Active loading/error/empty states remain available. Small typed callbacks share existing completed query summaries and the map fit command; token checks reject old selection/dataset/source callbacks without adding queries or changing worker aggregation.
+
+**Timeline:** Visible bars cap at 32 CSS pixels and remain centred in their calendar slots, retaining empty intervals and full-domain alignment. Reset range sits beside the selected range. Removed the redundant source/resolution prefix and zoom/filtering instruction. Controlled hover text uses the same immediate timing (no configured delay), bounded positioning and shared appearance as tree metadata tooltips; it clears over empty chart space, on exit, range/data/selection updates and tab changes. Absolute SVG positioning prevents intrinsic sizing feedback after tab switches/resizing; at 760px window width the final SVG measured 736 × 184 CSS pixels with a 1:1 screen transform. Single-sample axes omit duplicate count ticks. The approved zoom-only filtering fallback remains unchanged.
+
+**Map:** The existing OpenFreeMap Liberty source is reduced to neutral background/water/coastlines, country boundaries and existing disputed-boundary filters. Labels, roads, decorative fills, sprites/glyphs and unused sources are removed. Provider attribution, point positions, fit/zoom/pan behaviour and plain-background fallback are preserved. The removed header gives the map the remaining panel height. The live provider style was read to confirm the water/boundary layer IDs; a unit test checks retained attribution/filters and removal of unrelated sources/assets.
+
+**Tree/layout:** Restored the previous CgListTree + Taxonium wordmark/link inside DeckButtons using repository history, without restoring the application header. Removed only the mutation-type controls, leaving existing settings/query/rendering behaviour intact. Local config now supplies optional cached full-dataset bounds for each available branch axis (`treeBounds`); Reset zoom fits those canonical bounds with 24px padding to the measured tree area, accounting for metadata lanes, rotation and Treenome. Existing callers without bounds retain their previous fallback. This small config addition is directly required to fix the reset UI bug and does not alter tree processing or selection. Mobile selected-sample details now stay in the scrollable sidebar rather than covering Data views. Native select styling relies on the existing PostCSS `.taxonium` scope; browser checks caught and corrected a duplicated scope before the final build.
+
+**Build documentation/CI:** Expanded `taxonium_electron_standalone/README.md` and linked it from the root README. Covered Node/npm prerequisites, sibling packages, install-hook handling, component refresh during development, production/unpacked builds, unsigned platform packages, launch paths, GPU/headless caveats, map network use and native-platform limitations. The existing `.github/workflows/bigtree-electron.yml` already builds all four targets, so its component step now runs unit tests before building; no duplicate workflow, trigger changes or release-publishing changes were introduced. Workflow YAML, four native target entries and the existing `v*.*.*` tag trigger were validated locally. Remote CI/release uploads were not run in this task.
+
+**Validation:**
+
+- Component and Electron `npm run check-types`: passed with zero errors. Initial JSX/fixture typing errors found during implementation were corrected; no outstanding type errors.
+- Component suite: 98 tests passed, three opt-in performance benchmarks skipped. Added geometry projection tests across resize/orientation/metadata lanes/Treenome, exact bar slot/width checks, immediate tooltip content/cleanup, relocated count callbacks, stale callback rejection without extra queries and minimal-style source/filter checks. Updated the existing timeline assertions to test the relocated counters and controlled tooltip rather than the removed header/native title.
+- Component production build, ordinary website build, desktop renderer build and Electron packaging: passed. Existing dependency eval/export/chunk-size warnings remain informational; no checks were disabled. Final source maps matched the current SearchPanel, TimelinePanel and Taxonium source.
+- `/private/tmp/ui01-browser.cjs`: passed in permitted Chrome with pf tree/CSV/DOT and zero page errors. Checked collapsed defaults, retained colour/search state, adding searches, actual 24px native controls (including Timeline source and minimap settings), removed mutation options, inline heading/tabs, exact 5,815 timeline totals, maximum bar width, controlled tooltip bounds, country-outline map and attribution, moved Fit selection/coordinate/count controls, a real GPU-picked tip with matching one-sample map/timeline/table scopes, Reset zoom projection within 24px bounds at 1440px and 1000px widths in both orientations, 760px layout, 1:1 SVG scale and unobstructed chart picking after sample selection. Screenshots: `/private/tmp/ui01-map.png` and `/private/tmp/ui01-narrow.png`.
+- Electron server test: passed. Electron end-to-end tests: two passed using the desktop-mode website server. Packaged smoke: passed.
+- `/private/tmp/ui01-packaged.cjs`: passed using native GPU settings and zero page errors. Confirmed the original pf yearly totals (including the empty 2006 interval), relocated counts, actual 24px date-source control, keyboard range zoom/reset, tree Reset zoom and restored Taxonium branding. Screenshot: `/private/tmp/ui01-packaged-timeline.png`.
+- Refreshed unsigned artifacts: `../taxonium_electron_standalone/dist/BigTree-1.0.0-arm64.dmg` and `BigTree-1.0.0-arm64-mac.zip`. ZIP integrity and DMG checksums passed. Windows, Linux and macOS x64 remain native-CI responsibilities.
+- `git diff --check`: passed. Source test fixtures and existing unrelated files remain unchanged. No precommit setup was required.
+
+**Blockers/unresolved:** None for UI-01. Timeline linked date filtering remains deferred under the previously approved performance fallback. Existing external APP-03/native-CI confirmations and historical manual checks remain separate.
+
+**Next:** Await explicit user prioritization; do not automatically begin another task.
