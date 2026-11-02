@@ -82,6 +82,7 @@
       "allowToChangeInstallationDirectory": true
     },
     "linux": {
+      "executableName": "bigtree",
       "icon": "../electron-icon-pack/assets/linux/icon.png",
       "target": [
         "AppImage"

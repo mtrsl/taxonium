@@ -9,7 +9,7 @@ Do not automatically begin Next Task or other backlog items.
 # Current Status
 
 **Phase:** Final application improvements
-**Status:** APP-03 phase-one artifact upload fix is implemented and locally validated; the user will push and confirm uploads for all four CI targets. The desktop application, platform icons, package/UI authorship and native About-dialog follow-ups are complete. APP-02, APP-01, COMP-02, COMP-01, VIS-01 and META-01–04 are also complete.
+**Status:** APP-03 phase-one artifact upload fix and Linux smoke-discovery follow-up are implemented and locally validated. Linux packaging now explicitly names its executable `bigtree`, matching the smoke script and README. A native Linux smoke rerun and GitHub upload confirmation for all four targets remain pending. The desktop application, platform icons, package/UI authorship and native About-dialog follow-ups are complete. APP-02, APP-01, COMP-02, COMP-01, VIS-01 and META-01–04 are also complete.
 
 APP-03 packages the existing local-file website as BigTree in Electron. It keeps browser-worker processing and serves the production renderer from a managed loopback server. The unsigned macOS arm64 DMG and ZIP were generated and verified; the packaged app opens and loads a tree with metadata. Native CI builds cover macOS arm64/x64, Windows x64 and Linux x64.
 
@@ -19,13 +19,16 @@ APP-03 packages the existing local-file website as BigTree in Electron. It keeps
 
 Package the current local-file website as a secure Electron application named BigTree. Keep worker-based file processing and provide unsigned macOS, Windows and Linux packages.
 
-**Current follow-up (2026-11-02):** Fix the GitHub Actions upload paths, keeping the existing triggers so the user can push and verify all four target artifacts. Change the workflow to run only on release-tag pushes in a separate phase after the user confirms those uploads.
+**Current follow-up (2026-11-02):** Repair the Linux packaged smoke failure after the upload-path fix. Align Linux packaging with the existing smoke script and documented `bigtree` executable. Keep the existing triggers so the user can verify all four target artifacts. Change the workflow to run only on release-tag pushes in a separate phase after the user confirms those uploads.
 
 ### Checklist
 
 - [x] Diagnose the unsupported brace expansion in the upload path and confirm the phase-one scope with the user.
 - [x] Replace the brace expression with explicit DMG, ZIP, EXE and AppImage wildcard paths.
 - [x] Validate workflow YAML, package matching and relevant type checks; record the results and handoff.
+- [x] Reproduce the Linux executable discovery failure using the installed electron-builder's output naming and the actual smoke script.
+- [x] Set the Linux executable name explicitly to `bigtree` and verify the original reproduction passes.
+- [x] Run relevant checks and record Linux smoke-fix validation and CI limitations.
 - [ ] User confirms successful GitHub uploads for macOS arm64/x64, Windows x64 and Linux x64.
 - [x] Use the OS-specific icons from `electron-icon-pack/` in macOS, Windows and Linux packages and the Linux application window.
 - [x] Rebuild and verify the packaged macOS app and update the APP-03 handoff.
@@ -466,6 +469,12 @@ The project is complete when:
 
 # Design Notes
 
+## APP-03 — Linux smoke executable naming (2026-11-02)
+
+- electron-builder 26.18.0 derives the default Linux executable name from the npm package name, producing `dist/linux-unpacked/bigtree-desktop`. The smoke script and README both expect `dist/linux-unpacked/bigtree`.
+- Set `build.linux.executableName` to `bigtree` in the desktop package configuration. This aligns the generated package with the existing launch check and documented Linux command. macOS/Windows configuration and workflow triggers are unchanged.
+- Validate executable discovery with the installed `LinuxPackager` naming/output-directory logic and the actual smoke script in a temporary Linux package fixture. Stub the Electron launch so the discovery check can run on macOS; native Linux startup remains a CI validation step.
+
 ## APP-03 — Artifact uploads, phase one (2026-11-02)
 
 - `actions/upload-artifact@v6` uses `@actions/glob`, which disables brace expansion. The existing `dist/*.{dmg,zip,exe,AppImage}` pattern therefore fails to find the generated packages.
@@ -667,7 +676,7 @@ Use the following format:
 
 # Blockers
 
-APP-03 phase one is ready for the user to push. GitHub upload confirmation for macOS arm64/x64, Windows x64 and Linux x64 is pending; the release-tag-only trigger phase waits for that confirmation.
+APP-03's Linux executable-name fix is ready for the user to push and rerun CI. Native Linux smoke startup and GitHub upload confirmation for macOS arm64/x64, Windows x64 and Linux x64 are pending; the release-tag-only trigger phase waits for upload confirmation.
 
 None for COMP-01, COMP-02 or the unified bottom-panel extension. URL, gzip, malformed-DOT and dataset-replacement paths were validated. The pending META-02 manual large-table check remains separate and is not an implementation blocker.
 
@@ -685,6 +694,20 @@ Once resolved, record the resolution in Design Notes or Session Log and remove t
 ---
 
 # Session Log
+
+## 2026-11-02 — APP-03 Linux packaged smoke discovery fix
+
+**Cause and change:** Linux CI could not find the unpacked application because electron-builder generated `bigtree-desktop` from the npm package name, while `scripts/smoke-packaged.cjs` looked for `bigtree`. Added `build.linux.executableName: "bigtree"` to align packaging with the existing smoke script and README. The package configuration comparison confirmed that only Linux executable naming changed.
+
+**Validation:**
+
+- Reproduced the exact `Could not find the unpacked BigTree executable` error with a temporary Linux output fixture and the actual smoke script. Used the installed `LinuxPackager` to compute the fixture's output directory and executable name. Before the fix the discovery check failed repeatedly; after the fix it found `linux-unpacked/bigtree` and passed that path to the stubbed Electron launch.
+- electron-builder configuration schema validation passed.
+- Electron `npm run check-types` passed, including component TypeScript checks and Electron main/server syntax checks.
+- `npm run test:server` passed (1 test).
+- `git diff --check` passed. Removed the temporary reproduction harness after validation.
+
+**Limits and handoff:** The fixture checks discovery and resource lookup with Electron/browser calls stubbed; it does not demonstrate a native Linux launch. A macOS application rebuild would not exercise the Linux naming fix, so no application rebuild was repeated locally. The user will push and rerun Linux CI, then confirm uploads for all four targets before the separate release-tag-only trigger phase.
 
 ## 2026-11-02 — APP-03 artifact upload fix, phase one
 
