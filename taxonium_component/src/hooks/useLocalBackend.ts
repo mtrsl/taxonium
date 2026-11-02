@@ -1,3 +1,4 @@
+import type { TimelineRequest, TimelineResponse } from "../types/timeline";
 import type { GeographicRequest, GeographicResponse } from "../types/geography";
 import type { EmbeddingRequest, EmbeddingResponse } from "../types/embedding";
 import type { MetadataTableRequest, MetadataTableResponse } from "../types/metadataTable";
@@ -48,6 +49,7 @@ let onStatusReceipt: (receivedData: StatusData) => void = (receivedData) => {
 
 let onConfigReceipt: (receivedData: Config) => void = () => {};
 const detailsSetters = new Map<string, (data: NodeDetails) => void>();
+const timelineSetters = new Map<string, (data: TimelineResponse) => void>();
 const geographicSetters = new Map<string, (data: GeographicResponse) => void>();
 const embeddingSetters = new Map<string, (data: EmbeddingResponse) => void>();
 const tableSetters = new Map<string, (data: MetadataTableResponse) => void>();
@@ -109,6 +111,10 @@ const receiveMessage = (event: MessageEvent<LocalBackendMessage>) => {
     case "nextstrain":
       onNextStrainReceipt(data.data);
       break;
+    case "timeline":
+      timelineSetters.get(data.key)?.(data.data);
+      timelineSetters.delete(data.key);
+      break;
     case "geography":
       geographicSetters.get(data.key)?.(data.data);
       geographicSetters.delete(data.key);
@@ -167,7 +173,7 @@ function useLocalBackend(
   useLayoutEffect(() => {
     detailsSetters.clear();
     tableSetters.clear();
-    geographicSetters.clear();
+    geographicSetters.clear(); timelineSetters.clear();
     embeddingSetters.clear();
     metadataDensitySetters = {};
     visibleTipCountSetters = {};
@@ -204,7 +210,7 @@ function useLocalBackend(
         worker.onmessage = receiveMessage;
         lastUpload = null;
         activeImportId++;
-        detailsSetters.clear(); tableSetters.clear(); geographicSetters.clear(); embeddingSetters.clear();
+        detailsSetters.clear(); tableSetters.clear(); geographicSetters.clear(); timelineSetters.clear(); embeddingSetters.clear();
         searchSetters = {}; metadataDensitySetters = {}; visibleTipCountSetters = {};
         onQueryReceipt = () => {}; onConfigReceipt = () => {}; onStatusReceipt = () => {}; onListReceipt = () => {};
       });
@@ -277,6 +283,20 @@ function useLocalBackend(
     },
     [uploaded_data]
   );
+
+  const queryTimeline = useCallback((request: TimelineRequest,
+    callback: (response: TimelineResponse) => void) => {
+    const key = String(++densityRequestId);
+    const timer = setTimeout(() => {
+      if (!timelineSetters.has(key)) return;
+      timelineSetters.delete(key);
+      worker.postMessage({ type: "cancel_timeline", key });
+      callback({ error: "Timeline request timed out. Please retry." });
+    }, 60000);
+    timelineSetters.set(key, result => { clearTimeout(timer); callback(result); });
+    worker.postMessage({ type: "timeline", key, request });
+    return () => { clearTimeout(timer); timelineSetters.delete(key); worker.postMessage({ type: "cancel_timeline", key }); };
+  }, [uploaded_data]);
 
   const queryGeography = useCallback((request: GeographicRequest,
     callback: (response: GeographicResponse) => void) => {
@@ -410,6 +430,7 @@ function useLocalBackend(
       setStatusMessage,
       getTipAtts,
       queryMetadataTable,
+      queryTimeline,
       queryGeography,
       queryEmbedding,
       queryMetadataDensity,
@@ -426,6 +447,7 @@ function useLocalBackend(
     setStatusMessage,
     getTipAtts,
     queryMetadataTable,
+    queryTimeline,
     queryGeography,
     queryEmbedding,
     queryMetadataDensity,

@@ -51,7 +51,7 @@ it("runs only the selected spatial view and keeps genotype points neutral", asyn
   const metadataMatrix = { metadata: { specs: { meta_Country: spec } }, getFieldColor: () => [1, 2, 3] } as unknown as MetadataMatrix;
   const config = { metadataFields: {}, metadataSummaries: { meta_Lat: {}, meta_Long: {}, meta_Country: spec },
     embeddingDiagnostics: { supplied: true, available: true, matchedSamples: 1, invalidCoordinateRecords: 0, unmatchedIdentifiers: 0 } } as unknown as Config;
-  let bottomView: "metadata" | "map" | "embedding" = "map";
+  let bottomView: import("./BottomViewsPanel").BottomView = "map";
   let selectedNodeId: number | null = null;
   const render = (field = "meta_Country") => root.render(<BottomViewsPanel
     backend={{ queryGeography, queryEmbedding } as unknown as LocalBackend} config={config}

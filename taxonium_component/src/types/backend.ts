@@ -212,6 +212,7 @@ export interface ServerBackend extends BaseBackend {
 }
 
 export interface LocalBackend extends BaseBackend {
+  queryTimeline?: (request: import("./timeline").TimelineRequest, callback: (response: import("./timeline").TimelineResponse) => void) => () => void;
   queryGeography?: (request: import("./geography").GeographicRequest, callback: (response: import("./geography").GeographicResponse) => void) => () => void;
   queryEmbedding?: (request: import("./embedding").EmbeddingRequest, callback: (response: import("./embedding").EmbeddingResponse) => void) => () => void;
   queryMetadataTable?: (request: MetadataTableRequest, callback: (response: MetadataTableResponse) => void) => () => void;

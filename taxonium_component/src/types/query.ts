@@ -2,7 +2,7 @@ export interface Query {
   /** Tree orientation; unknown values use standard layout. */
   treeLayout?: "standard" | "rotated";
   /** Active local bottom view; defaults to metadata. */
-  bottomView?: "metadata" | "map" | "embedding";
+  bottomView?: "metadata" | "map" | "embedding" | "timeline";
   /** JSON string of search specifications */
   srch?: string;
   /** JSON string mapping search keys to enabled flag */

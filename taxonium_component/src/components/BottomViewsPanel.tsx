@@ -1,3 +1,5 @@
+import TimelinePanel from "./TimelinePanel";
+import type { TimelineSettings } from "../hooks/useTimeline";
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { Config, LocalBackend } from "../types/backend";
 import type { MetadataMatrix } from "../types/metadataMatrix";
@@ -5,9 +7,9 @@ import MetadataTablePanel from "./MetadataTablePanel";
 import GeographicMapPanel from "./GeographicMapPanel";
 import EmbeddingView from "./EmbeddingView";
 
-export type BottomView = "metadata" | "map" | "embedding";
+export type BottomView = "metadata" | "map" | "embedding" | "timeline";
 export function resolveBottomView(value: unknown, hasEmbedding: boolean): BottomView {
-  return value === "map" || (value === "embedding" && hasEmbedding) ? value : "metadata";
+  return value === "timeline" || value === "map" || (value === "embedding" && hasEmbedding) ? value : "metadata";
 }
 interface Props {
   backend: LocalBackend;
@@ -16,6 +18,7 @@ interface Props {
   field: string;
   metadataMatrix: MetadataMatrix;
   bottomView?: unknown;
+  timeline?: TimelineSettings;
   onBottomViewChange: (view: BottomView) => void;
 }
 
@@ -36,6 +39,7 @@ export default function BottomViewsPanel(props: Props) {
   const tabs: { value: BottomView; label: string; disabled?: boolean }[] = [
     { value: "metadata", label: "Metadata table" }, { value: "map", label: "Map" },
     { value: "embedding", label: "Embedding", disabled: !props.config.embeddingDiagnostics?.supplied },
+    { value: "timeline", label: "Timeline" },
   ];
   useLayoutEffect(() => {
     const parent = panel.current?.parentElement;
@@ -83,7 +87,7 @@ export default function BottomViewsPanel(props: Props) {
       {tabs.map(tab => <div key={tab.value} role="tabpanel" id={`${id}-${tab.value}-panel`}
         aria-labelledby={`${id}-${tab.value}-tab`} hidden={!open || activeTab !== tab.value}
         style={{ display: open && activeTab === tab.value ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
-        {tab.value === "metadata" ? <MetadataTablePanel {...props} active={open && activeTab === tab.value} /> :
+        {tab.value === "timeline" ? <TimelinePanel {...props} active={open && activeTab === tab.value} /> : tab.value === "metadata" ? <MetadataTablePanel {...props} active={open && activeTab === tab.value} /> :
           tab.value === "map" ? <GeographicMapPanel {...props} active={open && activeTab === tab.value} /> :
             <EmbeddingView {...props} active={open && activeTab === tab.value} />}
       </div>)}

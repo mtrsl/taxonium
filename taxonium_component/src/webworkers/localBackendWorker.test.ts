@@ -252,3 +252,24 @@ describe("uploaded metadata worker", () => {
     vi.unstubAllGlobals();
   });
 });
+
+it("discovers timeline sources in the worker and resets on upload replacement", async () => {
+  vi.resetModules();
+  const sent: any[] = [];
+  vi.stubGlobal("postMessage", (message: unknown) => sent.push(message));
+  vi.stubGlobal("onmessage", null);
+  try {
+    await import("./localBackendWorker.js");
+    const send = async (data: unknown) => { await (globalThis.onmessage as any)({ data }); return sent.at(-1); };
+    const upload = (year: string) => send({ type: "upload", data: { filename: "test.jsonl", fixture: {
+      nodes: [{ node_id: 0, parent_id: 0, is_tip: true, num_tips: 1, y: 0, name: "A", mutations: [], meta_Year: year }], mutations: [], overwrite_config: {},
+    } } });
+    await upload("2001");
+    const first = await send({ type: "timeline", key: "t1", request: { selectedNodeId: null } });
+    expect(first).toMatchObject({ type: "timeline", key: "t1", data: { datedCount: 1, source: { min: 2001, max: 2001 } } });
+    await upload("2005");
+    const next = await send({ type: "timeline", key: "t2", request: { selectedNodeId: null } });
+    expect(next.data.source.min).toBe(2005);
+    expect(next.data.bars[0].label).toBe("2005");
+  } finally { vi.unstubAllGlobals(); }
+});

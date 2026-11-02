@@ -9,45 +9,32 @@ Do not automatically begin Next Task or other backlog items.
 # Current Status
 
 **Phase:** Final application improvements
-**Status:** APP-03 phase-one artifact upload fix and Linux smoke-discovery follow-up are implemented and locally validated. Linux packaging now explicitly names its executable `bigtree`, matching the smoke script and README. A native Linux smoke rerun and GitHub upload confirmation for all four targets remain pending. The desktop application, platform icons, package/UI authorship and native About-dialog follow-ups are complete. APP-02, APP-01, COMP-02, COMP-01, VIS-01 and META-01–04 are also complete.
+**Status:** COMP-03 is complete: worker-aggregated Timeline, date-source settings, shared metadata colours, selected-clade scope and accessible range zoom are implemented and validated with pf and the large tree. The approved zoom-only fallback is active because the linked-filter performance gate failed. BigTree was rebuilt and the unsigned macOS arm64 DMG/ZIP were verified, including pf in the packaged application. APP-03 Linux native smoke/upload confirmation and the separately gated release-trigger change remain pending.
 
 APP-03 packages the existing local-file website as BigTree in Electron. It keeps browser-worker processing and serves the production renderer from a managed loopback server. The unsigned macOS arm64 DMG and ZIP were generated and verified; the packaged app opens and loads a tree with metadata. Native CI builds cover macOS arm64/x64, Windows x64 and Linux x64.
 
 # Current Task
 
-## APP-03 — BigTree Electron desktop application
+## COMP-03 — Timeline
 
-Package the current local-file website as a secure Electron application named BigTree. Keep worker-based file processing and provide unsigned macOS, Windows and Linux packages.
-
-**Current follow-up (2026-11-02):** Repair the Linux packaged smoke failure after the upload-path fix. Align Linux packaging with the existing smoke script and documented `bigtree` executable. Keep the existing triggers so the user can verify all four target artifacts. Change the workflow to run only on release-tag pushes in a separate phase after the user confirms those uploads.
+Implement the approved stacked timeline in Data views, with date-source controls in Options → Timeline display. Validate pf, benchmark the large tree using a temporary dated CSV, and rebuild BigTree Electron.
 
 ### Checklist
 
-- [x] Diagnose the unsupported brace expansion in the upload path and confirm the phase-one scope with the user.
-- [x] Replace the brace expression with explicit DMG, ZIP, EXE and AppImage wildcard paths.
-- [x] Validate workflow YAML, package matching and relevant type checks; record the results and handoff.
-- [x] Reproduce the Linux executable discovery failure using the installed electron-builder's output naming and the actual smoke script.
-- [x] Set the Linux executable name explicitly to `bigtree` and verify the original reproduction passes.
-- [x] Run relevant checks and record Linux smoke-fix validation and CI limitations.
-- [ ] User confirms successful GitHub uploads for macOS arm64/x64, Windows x64 and Linux x64.
-- [x] Use the OS-specific icons from `electron-icon-pack/` in macOS, Windows and Linux packages and the Linux application window.
-- [x] Rebuild and verify the packaged macOS app and update the APP-03 handoff.
-- [x] Record Theo Sanderson as package author and Matt Russell and John Lees as package contributors; keep email addresses in package metadata only.
-- [x] Validate the metadata and update the APP-03 handoff.
-- [x] Show all three BigTree authors in the desktop About overlay without email addresses; keep the Taxonium paper citation unchanged.
-- [x] Validate the desktop renderer and update the APP-03 handoff.
-- [x] Set the macOS native About-dialog copyright metadata to display all three authors.
-- [x] Rebuild and verify the macOS application and distributables, then update the APP-03 handoff.
-- [x] Rename the Electron package to `taxonium_electron_standalone`, brand it BigTree, and use the current website and component.
-- [x] Serve the production renderer from a loopback server owned by the Electron main process; preserve worker processing and secure Electron defaults.
-- [x] Add development, type-check, test, production build and platform packaging scripts; remove the obsolete backend launcher and binary downloads.
-- [x] Add native CI builds for macOS arm64/x64, Windows x64 and Linux x64, plus developer and platform documentation.
-- [x] Validate the production and packaged macOS application, core dataset workflow and CI packaging configuration.
-- [x] Record Design Notes, validation, Current Status, Session Log and handoff.
+- [x] Add strict date discovery/indexing and bounded worker aggregation using shared metadata colours.
+- [x] Add Timeline tab, sidebar date-source selector, overview and accessible range handles.
+- [x] Measure worker linked-filter preparation plus tree refresh at million-tip scale; enable linked views only if warmed p95 is within one second, otherwise ship the approved zoom-only fallback.
+- [x] Validate date edge cases, pf counts, selection, recolouring, replacement and browser interactions.
+- [x] Run type checks, relevant tests, Electron build, packaged smoke and unsigned macOS arm64 packaging.
+- [x] Record design decisions, measurements, validation and handoff.
+
+### Design notes
+
+Approved defaults: prefer calendar components then conventional ISO date names then metadata order; use the coarsest valid dataset precision per source. Maximum 512 time bins and 16 numeric colour ranges. Keep date arrays in the worker, cancel stale queries and bound responses. Range state is dataset-local; the tab uses `bottomView=timeline`. Export behaviour is unchanged. Linked filtering has an explicit performance gate and zoom-only fallback. Preserve original test fixtures and pending APP-03 release/upload work.
 
 # Next Task
 
-Await the user's confirmation that all four target artifacts upload successfully. Then handle the release-tag-only trigger change as a separate phase; do not begin it before that confirmation.
+Await user prioritization. Pending APP-03 upload confirmation and release-tag-only trigger changes remain separate; do not start them or another backlog item automatically.
 
 ---
 
@@ -326,6 +313,48 @@ Design considerations:
 - Do not compute a graph layout if usable coordinates are already provided.
 - Prefer efficient rendering for large numbers of points.
 - Reuse existing visualisation infrastructure where possible.
+
+
+### COMP-03 - Timeline
+
+**Status:** Complete (2026-11-02), with the approved zoom-only fallback. See the completion session below for design and validation evidence.
+
+**Dependency:** META-04 and COMP-02.
+
+Add a component which shows a stacked bar timeline panel.
+
+Detect time columns using conventional names (case insensitive):
+
+- `year`, `month`, `day`. Where resolution varies across samples, use
+  the lowest resolution.
+- ISO dates `yyyy-mm-dd` or `yyyy-mm`.
+
+x-axis is time, y-axis is count.
+
+Requirements:
+
+- Place the panel as an option with the existing table, map and
+  embeddings, calling it 'Timeline'.
+- Validate or safely ignore missing and invalid dates.
+- Create stacked bars on the backend with the same process as the
+  metadata bars next to the tree.
+- Remain responsive for large sample counts. This will require prerender
+  on the backend component, and possibly aggregation of points when
+  zoomed out.
+- Colour bars according to the active metadata and shared colour mapping.
+- Tooltips display the stacked bar count, time window, and active
+  metadata.
+- Subset displayed points according to selected samples.
+- Update when the active metadata or colour assignment changes.
+- Support appropriate zooming and panning via use of a slider across the
+  whole timeline, implemented in the UI with two points on the x-axis which the user can move across
+  the range.
+
+Design considerations:
+
+- Reuse existing selection state.
+- Avoid independent metadata colour logic.
+
 
 ---
 
@@ -1039,3 +1068,71 @@ The unchanged browser baseline crashed during import. A Node bundle of the origi
 # Deviations
 
 META-04 required a small import-memory fix before the large fixture could load in Chrome. Compact metadata object construction replaces dynamic property dictionaries without changing metadata semantics. The updated fixture catalog also distinguishes the verified tree-tip count from the CSV line/record counts. These direct dependencies and the measurement limitations are documented above.
+
+
+## APP-03 handoff retained
+
+## APP-03 — BigTree Electron desktop application
+
+Package the current local-file website as a secure Electron application named BigTree. Keep worker-based file processing and provide unsigned macOS, Windows and Linux packages.
+
+**Current follow-up (2026-11-02):** Repair the Linux packaged smoke failure after the upload-path fix. Align Linux packaging with the existing smoke script and documented `bigtree` executable. Keep the existing triggers so the user can verify all four target artifacts. Change the workflow to run only on release-tag pushes in a separate phase after the user confirms those uploads.
+
+### Checklist
+
+- [x] Diagnose the unsupported brace expansion in the upload path and confirm the phase-one scope with the user.
+- [x] Replace the brace expression with explicit DMG, ZIP, EXE and AppImage wildcard paths.
+- [x] Validate workflow YAML, package matching and relevant type checks; record the results and handoff.
+- [x] Reproduce the Linux executable discovery failure using the installed electron-builder's output naming and the actual smoke script.
+- [x] Set the Linux executable name explicitly to `bigtree` and verify the original reproduction passes.
+- [x] Run relevant checks and record Linux smoke-fix validation and CI limitations.
+- [ ] User confirms successful GitHub uploads for macOS arm64/x64, Windows x64 and Linux x64.
+- [x] Use the OS-specific icons from `electron-icon-pack/` in macOS, Windows and Linux packages and the Linux application window.
+- [x] Rebuild and verify the packaged macOS app and update the APP-03 handoff.
+- [x] Record Theo Sanderson as package author and Matt Russell and John Lees as package contributors; keep email addresses in package metadata only.
+- [x] Validate the metadata and update the APP-03 handoff.
+- [x] Show all three BigTree authors in the desktop About overlay without email addresses; keep the Taxonium paper citation unchanged.
+- [x] Validate the desktop renderer and update the APP-03 handoff.
+- [x] Set the macOS native About-dialog copyright metadata to display all three authors.
+- [x] Rebuild and verify the macOS application and distributables, then update the APP-03 handoff.
+- [x] Rename the Electron package to `taxonium_electron_standalone`, brand it BigTree, and use the current website and component.
+- [x] Serve the production renderer from a loopback server owned by the Electron main process; preserve worker processing and secure Electron defaults.
+- [x] Add development, type-check, test, production build and platform packaging scripts; remove the obsolete backend launcher and binary downloads.
+- [x] Add native CI builds for macOS arm64/x64, Windows x64 and Linux x64, plus developer and platform documentation.
+- [x] Validate the production and packaged macOS application, core dataset workflow and CI packaging configuration.
+- [x] Record Design Notes, validation, Current Status, Session Log and handoff.
+
+
+## 2026-11-02 — COMP-03 implementation started
+
+Read the authoritative plan and preserved its existing COMP-03 requirements and APP-03 handoff. Implementing the approved timeline and Electron validation scope.
+
+
+## 2026-11-02 — COMP-03 complete
+
+**Delivered:** Timeline joins the existing Data views tabs and URL-backed `bottomView` state. Options contains a Timeline display disclosure with an automatically selected date source and a selector. Strict Gregorian component/ISO parsing ignores missing and invalid dates and chooses the coarsest valid dataset precision. Timeline follows the existing selected-clade state and metadata typing/colour overrides. It provides count axes, empty intervals, stacked segment tooltips, an overview, two native keyboard/pointer range handles and Reset range. Layout measurement keeps labels readable when resized or rotated. No source fixtures, exports, platform targets, release triggers or unrelated application code were changed.
+
+**Worker design:** Date discovery retains source descriptors; only one active source's Float64 date array and one active field's Uint8 colour codes are cached. Queries return at most 512 calendar bins, with adjacent bins merged when zoomed out. Numeric colouring uses 16 ranges sampled from the shared scale. Categorical colouring retains at most 62 bounded heavy-hitter candidates plus explicit Missing and Other categories segments; represented categories retain their shared colours and all counts remain exact. Colour seeds/palettes do not invalidate the count-code cache. Cooperative checkpoints, request cancellation, latest-request scheduling and import generations suppress obsolete work. The full overview remains independent of the zoom window. Source changes and dataset replacement reset the range.
+
+**Linked-filter decision:** Ship the approved zoom-only fallback. A temporary candidate worker path built date eligibility/ancestor masks, filtered leaves before the existing production `getNodes` reduction and copied the resulting tree response with `structuredClone`. Six warmed full-tree runs measured 870, 2253, 839, 821, 831 and 820 ms (nearest-rank p95 2253 ms), exceeding the one-second gate before adding linked metadata/spatial-view refresh work. No partial linked filter is enabled. The UI explains that linked filtering is disabled to keep large datasets responsive. Prototype code and detailed measurements are in `/private/tmp/comp03-gate-entry.ts`, `/private/tmp/comp03-filtering.mjs` and `/private/tmp/comp03-gate-final.log`.
+
+**Fixtures and performance:**
+
+- Original pf CSV independently counted: 5,815 valid years, 2001–2015. Browser and packaged-app yearly bars exactly matched: 33, 49, 77, 70, 37, 0, 146, 471, 252, 506, 1129, 673, 1602, 679, 91 (including the empty 2006 bin).
+- The original large tree/CSV remain untouched. `/private/tmp/comp03-dated.csv.gz` adds `Collection_date` to a compressed temporary copy. For zero-based CSV row i: blank if i is divisible by 101, otherwise invalid `2001-02-30` if divisible by 103, otherwise 2000-01-01 plus i modulo 7305 days. All original sample IDs are retained.
+- On 2,399,238 tips: 2,352,412 valid dates and 46,826 missing/invalid/unmatched dates; 487 overview bins and approximately 276 KB for the categorical response in the isolated run. Warm aggregation was 18–110 ms.
+- The committed opt-in benchmark with cooperative yielding passed: source discovery 2.57 s, first query/date-and-colour indexing 3.73 s, subsequent range/recolour queries 22–33 ms; retained timeline arrays 21,593,142 bytes (20.6 MiB); 533 cooperative yields. Run from the component with `RUN_TIMELINE_BENCHMARK=1 TIMELINE_METADATA=/private/tmp/comp03-dated.csv.gz NODE_OPTIONS=--max-old-space-size=16384 npm test -- --run src/utils/timeline.benchmark.test.ts`. Detailed output: `/private/tmp/comp03-timeline-benchmark.log`.
+
+**Validation:**
+
+- Component and Electron `npm run check-types`: passed with zero errors. Updated a pre-existing test's explicit BottomView union for the new Timeline tab. New fixture typing errors found during development were corrected.
+- Full component suite: 94 passed; three opt-in benchmarks skipped in the ordinary run. The large timeline benchmark was separately enabled and passed. Calendar/leap-year validity, mixed precision, ignored values, empty intervals, shared categorical/numeric colours, bounded output, selected tips, cancellation, hidden-panel cleanup and upload replacement are covered.
+- Chrome: original pf counts, keyboard range zoom/reset; temporary pf copy with a second mixed-precision ISO source (2,907 February and 2,908 March samples); source switching, palette reshuffling, numeric typing/colour bins, rotated layout, tab switching, collapse/reopen, narrow viewport and replacement with a no-date dataset all passed with zero page errors. Temporary scripts: `/private/tmp/comp03-basic.cjs` and `/private/tmp/comp03-extended.cjs`. Narrow screenshot: `/private/tmp/comp03-narrow.png`.
+- Electron `npm run test:server`: passed after permitting loopback networking outside the sandbox. `npm run test:e2e`: two passed after stopping the ordinary website dev server so Playwright could start its desktop-mode server; the initial reused ordinary server had the Taxonium title. `npm run build` and `npm run smoke:packaged`: passed. Build/package downloads required permitted network access after sandbox DNS failures.
+- `npm run package:mac:arm64`: passed. Artifacts are `../taxonium_electron_standalone/dist/BigTree-1.0.0-arm64.dmg` and `BigTree-1.0.0-arm64-mac.zip`; DMG checksums and ZIP integrity passed. Build source maps were checked against the final Timeline source.
+- Packaged BigTree with pf tree/CSV: exact yearly totals, empty interval, keyboard zoom/reset and zero page errors passed with normal native GPU settings. Screenshot: `/private/tmp/comp03-packaged-timeline.png`; script: `/private/tmp/comp03-packaged.cjs`. Forced software-rendering launch flags produced a null WebGL-context/luma startup failure, including without an embedding; normal native settings reported WebGL enabled and passed. No application workaround was added for those test-only flags.
+- `git diff --check`: passed. Windows, Linux and macOS x64 packaging remain native-CI responsibilities; their existing targets are preserved.
+
+**Blockers/unresolved:** None for COMP-03. Linked date filtering remains deferred by the explicitly approved performance fallback. Previously recorded APP-03 upload/native Linux confirmation and META-02 manual checks remain separate.
+
+**Next:** Await explicit user prioritization; do not start another task automatically.

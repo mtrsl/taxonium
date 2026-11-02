@@ -1,3 +1,4 @@
+import { discoverTimeline, queryTimeline } from "../utils/timeline";
 import { buildGeographicIndex, queryGeography } from "../utils/geography";
 import { buildEmbeddingIndex, queryEmbedding } from "../utils/embedding";
 import { fetch_or_extract } from "../utils/processNewick";
@@ -48,6 +49,8 @@ const cache_helper = {
 
 let processedUploadedData;
 let uploadGeneration = 0;
+let pendingTimeline = null;
+let activeTimeline = null;
 let pendingGeography = null;
 let activeGeography = null;
 let pendingEmbedding = null;
@@ -568,6 +571,8 @@ onmessage = async (event) => {
     processedUploadedData = undefined;
     const generation = ++uploadGeneration;
     for (const key of Object.keys(the_cache)) delete the_cache[key];
+    if (activeTimeline) activeTimeline.cancelled = true;
+    pendingTimeline = null;
     if (activeDensity) activeDensity.cancelled = true;
     pendingDensity = null;
     if (pendingGeography) postMessage({ type: "geography", key: pendingGeography.key, data: { cancelled: true } });
@@ -632,6 +637,39 @@ onmessage = async (event) => {
         processedUploadedData.mutations
       );
       postMessage({ type: "nextstrain", data: result });
+    }
+    if (data.type === "cancel_timeline") {
+      if (activeTimeline?.key === data.key) activeTimeline.cancelled = true;
+      if (pendingTimeline?.key === data.key) pendingTimeline = null;
+    }
+    if (data.type === "timeline") {
+      if (pendingTimeline) postMessage({ type: "timeline", key: pendingTimeline.key, data: { cancelled: true } });
+      pendingTimeline = { ...data, generation: uploadGeneration };
+      if (activeTimeline) { activeTimeline.cancelled = true; return; }
+      while (pendingTimeline) {
+        const task = pendingTimeline; pendingTimeline = null; activeTimeline = task;
+        let lastYield = performance.now();
+        const checkpoint = async () => {
+          if (task.cancelled || task.generation !== uploadGeneration) throw DENSITY_CANCELLED;
+          if (performance.now() - lastYield >= 8) {
+            await yieldToMessages(); lastYield = performance.now();
+            if (task.cancelled || task.generation !== uploadGeneration) throw DENSITY_CANCELLED;
+          }
+        };
+        try {
+          await waitForProcessedData(); await checkpoint();
+          const dataset = processedUploadedData;
+          dataset.metadataTableIndex ??= buildMetadataTableIndex(dataset.nodes);
+          dataset.timelineIndex ??= await discoverTimeline(dataset.nodes, dataset.metadataTableIndex,
+            Object.keys(dataset.metadataDensityIndex.fieldInfo), checkpoint);
+          const result = await queryTimeline(dataset.nodes, dataset.metadataTableIndex, dataset.timelineIndex, task.request, checkpoint);
+          await checkpoint();
+          postMessage({ type: "timeline", key: task.key, data: result });
+        } catch (error) {
+          postMessage({ type: "timeline", key: task.key, data: error === DENSITY_CANCELLED ? { cancelled: true } :
+            { error: error.message ?? "Unable to load timeline" } });
+        } finally { activeTimeline = null; }
+      }
     }
     if (data.type === "cancel_geography") {
       if (activeGeography?.key === data.key) activeGeography.cancelled = true;

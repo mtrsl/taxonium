@@ -68,6 +68,7 @@ export interface EmbeddingData {
 }
 
 export type LocalBackendMessage =
+  | { type: "timeline"; key: string; data: import("./timeline").TimelineResponse }
   | { type: "geography"; key: string; data: import("./geography").GeographicResponse }
   | EmbeddingData
   | MetadataTableData

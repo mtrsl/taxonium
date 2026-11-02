@@ -1,3 +1,4 @@
+import type { TimelineSettings } from "../hooks/useTimeline";
 import MetadataTypeControl from "./MetadataTypeControl";
 import SearchTopLayerItem from "./SearchTopLayerItem";
 import { RiAddCircleLine, RiArrowLeftUpLine } from "react-icons/ri";
@@ -58,6 +59,7 @@ interface SearchPanelProps {
   search: SearchState;
   colorBy: ColorBy;
   metadataMatrix: MetadataMatrix;
+  timeline?: TimelineSettings;
   config: Config;
   selectedDetails: SelectedDetails;
   overlayContent: OverlayContent["content"];
@@ -80,6 +82,7 @@ function SearchPanel({
   search,
   colorBy,
   metadataMatrix,
+  timeline,
   config,
   selectedDetails,
   overlayContent,
@@ -467,6 +470,17 @@ function SearchPanel({
             </label>
           </div>
         )}
+        {backend.type === "local" && timeline && <details className="space-y-2 border-t border-gray-100 pt-3">
+          <summary className="cursor-pointer font-bold text-gray-700">Timeline display</summary>
+          <label className="flex flex-col gap-1 text-xs text-gray-700">Date source
+            <select className="rounded-sm border p-1" aria-label="Timeline date source" value={timeline.source} disabled={!timeline.sources.length}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) => timeline.setSource(event.target.value)}>
+              {!timeline.sources.length && <option value="">No usable dates</option>}
+              {timeline.sources.map(source => <option key={source.id} value={source.id}>{source.label} ({source.precision})</option>)}
+            </select>
+          </label>
+          {timeline.error && <p role="alert">{timeline.error} <button type="button" onClick={timeline.retry}>Retry timeline</button></p>}
+        </details>}
         <details className="space-y-2 border-t border-gray-100 pt-3">
           <summary className="cursor-pointer font-bold text-gray-700">
             Metadata matrix

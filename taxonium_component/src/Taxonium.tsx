@@ -1,3 +1,4 @@
+import useTimeline from "./hooks/useTimeline";
 import BottomViewsPanel from "./components/BottomViewsPanel";
 import type { BottomView } from "./components/BottomViewsPanel";
 import useMetadata from "./hooks/useMetadata";
@@ -180,6 +181,7 @@ function Taxonium({
   }
   const selectedDetails = useNodeDetails("selected", backend);
 
+  const timeline = useTimeline(backend);
   const config = useConfig(
     backend,
     view,
@@ -377,6 +379,7 @@ function Taxonium({
                 backend={backend}
                 search={search}
                 colorBy={colorBy}
+                timeline={timeline}
                 metadataMatrix={metadataMatrix}
                 colorHook={colorHook}
                 config={config}
@@ -398,7 +401,7 @@ function Taxonium({
         </div>
         {backend.type === "local" && backend.queryMetadataTable && <BottomViewsPanel backend={backend} config={config}
           selectedNodeId={selectedDetails.selectedNodeId} field={colorBy.colorByField} metadataMatrix={metadataMatrix}
-          bottomView={query.bottomView} onBottomViewChange={setBottomView} />}
+          timeline={timeline} bottomView={query.bottomView} onBottomViewChange={setBottomView} />}
       </div>
     </GlobalErrorBoundary>
   );
